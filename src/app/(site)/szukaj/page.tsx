@@ -1,4 +1,8 @@
-import Link from "next/link";
+import {
+  CatalogListingGrid,
+  catalogProductGridClassName,
+} from "@/components/CatalogListingGrid";
+import { CatalogPagination } from "@/components/CatalogPagination";
 import { ProductCard } from "@/components/ProductCard";
 import { searchProducts } from "@/lib/catalog";
 import { getStoreById } from "@/lib/stores";
@@ -30,29 +34,6 @@ function parsePriceParam(value?: string): number | null {
 function parsePageNumber(value?: string): number {
   const page = Number.parseInt(value ?? "", 10);
   return Number.isFinite(page) && page > 0 ? page : 1;
-}
-
-function getPageLinks(currentPage: number, totalPages: number): Array<number | "..."> {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, i) => i + 1);
-  }
-
-  const pages = new Set<number>([1, totalPages]);
-  for (let p = currentPage - 1; p <= currentPage + 1; p++) {
-    if (p > 1 && p < totalPages) pages.add(p);
-  }
-  if (currentPage <= 3) pages.add(2);
-  if (currentPage >= totalPages - 2) pages.add(totalPages - 1);
-
-  const sortedPages = [...pages].sort((a, b) => a - b);
-  const links: Array<number | "..."> = [];
-  for (let i = 0; i < sortedPages.length; i++) {
-    const page = sortedPages[i];
-    const prev = sortedPages[i - 1];
-    if (prev != null && page - prev > 1) links.push("...");
-    links.push(page);
-  }
-  return links;
 }
 
 export default async function SearchPage({ searchParams }: Props) {
@@ -145,9 +126,20 @@ export default async function SearchPage({ searchParams }: Props) {
         />
       </form>
 
-      <div className="mt-10 grid gap-8 lg:grid-cols-[18rem_minmax(0,1fr)]">
-        {query && (
-          <aside className="h-fit rounded-xl border border-water-700 bg-white p-4 shadow-sm lg:sticky lg:top-24">
+      <CatalogListingGrid
+        topPagination={
+          pagedResults.length > 0 ? (
+            <CatalogPagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              pageHref={pageHref}
+              ariaLabel="Paginacja wyszukiwania"
+            />
+          ) : undefined
+        }
+        sidebar={
+          query ? (
+            <aside className="h-fit rounded-xl border border-water-700 bg-white p-4 shadow-sm lg:sticky lg:top-24">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">
               Sortowanie i filtry
             </h2>
@@ -259,121 +251,32 @@ export default async function SearchPage({ searchParams }: Props) {
                 </a>
               </div>
             </form>
-          </aside>
-        )}
-        <div className="relative">
-          {results.length > 0 && totalPages > 1 && (
-            <div className="mb-4 flex justify-end lg:absolute lg:right-0 lg:-top-12 lg:mb-0">
-              <nav className="flex flex-wrap items-center gap-2" aria-label="Paginacja wyszukiwania">
-                <Link
-                  href={pageHref(Math.max(1, currentPage - 1))}
-                  className={`rounded-md border px-3 py-1.5 text-sm transition ${
-                    currentPage === 1
-                      ? "pointer-events-none border-water-700 text-water-500 opacity-50"
-                      : "border-water-700 text-foreground hover:bg-water-900"
-                  }`}
-                  aria-disabled={currentPage === 1}
-                >
-                  Poprzednia
-                </Link>
-                {getPageLinks(currentPage, totalPages).map((entry, index) =>
-                  entry === "..." ? (
-                    <span key={`ellipsis-${index}`} className="px-1 text-water-500">
-                      ...
-                    </span>
-                  ) : (
-                    <Link
-                      key={entry}
-                      href={pageHref(entry)}
-                      aria-current={entry === currentPage ? "page" : undefined}
-                      className={`rounded-md border px-3 py-1.5 text-sm transition ${
-                        entry === currentPage
-                          ? "border-accent-500 bg-accent-500 text-white"
-                          : "border-water-700 text-foreground hover:bg-water-900"
-                      }`}
-                    >
-                      {entry}
-                    </Link>
-                  )
-                )}
-                <Link
-                  href={pageHref(Math.min(totalPages, currentPage + 1))}
-                  className={`rounded-md border px-3 py-1.5 text-sm transition ${
-                    currentPage === totalPages
-                      ? "pointer-events-none border-water-700 text-water-500 opacity-50"
-                      : "border-water-700 text-foreground hover:bg-water-900"
-                  }`}
-                  aria-disabled={currentPage === totalPages}
-                >
-                  Następna
-                </Link>
-              </nav>
+            </aside>
+          ) : undefined
+        }
+      >
+        {pagedResults.length > 0 && (
+          <>
+            <div className={catalogProductGridClassName}>
+              {pagedResults.map((p) => (
+                <ProductCard key={p.id} product={p} />
+              ))}
             </div>
-          )}
-          {pagedResults.length > 0 && (
-            <>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {pagedResults.map((p) => (
-                  <ProductCard key={p.id} product={p} />
-                ))}
-              </div>
-              {totalPages > 1 && (
-                <div className="mt-6 flex justify-end">
-                  <nav className="flex flex-wrap items-center gap-2" aria-label="Paginacja wyszukiwania dół">
-                    <Link
-                      href={pageHref(Math.max(1, currentPage - 1))}
-                      className={`rounded-md border px-3 py-1.5 text-sm transition ${
-                        currentPage === 1
-                          ? "pointer-events-none border-water-700 text-water-500 opacity-50"
-                          : "border-water-700 text-foreground hover:bg-water-900"
-                      }`}
-                      aria-disabled={currentPage === 1}
-                    >
-                      Poprzednia
-                    </Link>
-                    {getPageLinks(currentPage, totalPages).map((entry, index) =>
-                      entry === "..." ? (
-                        <span key={`ellipsis-bottom-${index}`} className="px-1 text-water-500">
-                          ...
-                        </span>
-                      ) : (
-                        <Link
-                          key={`bottom-${entry}`}
-                          href={pageHref(entry)}
-                          aria-current={entry === currentPage ? "page" : undefined}
-                          className={`rounded-md border px-3 py-1.5 text-sm transition ${
-                            entry === currentPage
-                              ? "border-accent-500 bg-accent-500 text-white"
-                              : "border-water-700 text-foreground hover:bg-water-900"
-                          }`}
-                        >
-                          {entry}
-                        </Link>
-                      )
-                    )}
-                    <Link
-                      href={pageHref(Math.min(totalPages, currentPage + 1))}
-                      className={`rounded-md border px-3 py-1.5 text-sm transition ${
-                        currentPage === totalPages
-                          ? "pointer-events-none border-water-700 text-water-500 opacity-50"
-                          : "border-water-700 text-foreground hover:bg-water-900"
-                      }`}
-                      aria-disabled={currentPage === totalPages}
-                    >
-                      Następna
-                    </Link>
-                  </nav>
-                </div>
-              )}
-            </>
-          )}
+            <CatalogPagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              pageHref={pageHref}
+              ariaLabel="Paginacja wyszukiwania — dół"
+              className="mt-6"
+              idSuffix="-bottom"
+            />
+          </>
+        )}
 
-          {query && results.length === 0 && (
-            <p className="text-water-500">Nie znaleziono produktów.</p>
-          )}
-        </div>
-
-      </div>
+        {query && results.length === 0 && (
+          <p className="text-water-500">Nie znaleziono produktów.</p>
+        )}
+      </CatalogListingGrid>
     </div>
   );
 }

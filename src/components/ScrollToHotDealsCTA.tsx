@@ -12,7 +12,7 @@ export function ScrollToHotDealsCTA() {
 
   return (
     <div className="flex flex-col items-center gap-3 pt-6 sm:pt-8">
-      <span className="text-water-400" aria-hidden>
+      <span className="text-foreground/80 drop-shadow-[0_1px_8px_rgba(255,255,255,0.9)]" aria-hidden>
         <svg
           className="h-7 w-7 animate-bounce"
           viewBox="0 0 24 24"
@@ -23,7 +23,7 @@ export function ScrollToHotDealsCTA() {
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </span>
-      <p className="text-center text-base font-medium text-water-300 sm:text-lg">
+      <p className="text-center text-base font-semibold text-foreground drop-shadow-[0_1px_12px_rgba(255,255,255,0.85)] sm:text-lg">
         Sprawdź największe promocje
       </p>
       <button

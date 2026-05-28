@@ -7,7 +7,7 @@ import { formatPrice, getStoreNameForOffer } from "@/lib/price-engine";
 import { ProductImage } from "./ProductImage";
 
 const INTERVAL_MS = 4500;
-const GAP_REM = 0.75; // gap-3
+const GAP_REM = 1; // gap-4
 
 const sectionTitleClass =
   "text-2xl font-bold leading-tight tracking-tight text-foreground sm:text-3xl lg:text-4xl";
@@ -42,31 +42,33 @@ function MiniPromoWindow({ product }: { product: ProductWithOffers }) {
   return (
     <Link
       href={`/produkt/${product.slug}`}
-      className="group flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-water-700 bg-white shadow-sm transition-colors hover:border-accent-500/50 hover:shadow-md"
+      className="group flex h-full min-h-0 flex-col overflow-hidden rounded-xl border-2 border-water-600/90 bg-white shadow-[0_4px_16px_rgba(15,23,42,0.1)] ring-1 ring-black/5 transition-all duration-300 ease-out hover:-translate-y-1.5 hover:border-accent-500 hover:shadow-[0_14px_32px_rgba(5,150,105,0.22)] hover:ring-2 hover:ring-accent-500/25"
     >
-      <div className="relative aspect-square shrink-0 bg-water-900">
+      <div className="relative aspect-square shrink-0 border-b-2 border-water-700/60 bg-gradient-to-b from-white to-water-900">
         <ProductImage
           src={product.image}
           alt={product.name}
-          className="h-full w-full rounded-t-lg object-contain p-1.5"
+          className="h-full w-full object-contain p-2 transition-transform duration-300 group-hover:scale-[1.03]"
         />
-        <span className="absolute right-1.5 top-1.5 rounded-md bg-accent-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white shadow-sm">
+        <span className="absolute right-2 top-2 rounded-lg bg-accent-500 px-2 py-1 text-[11px] font-bold leading-none text-white shadow-[0_2px_8px_rgba(5,150,105,0.45)] sm:text-xs">
           −{product.discountPercent}%
         </span>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col p-2">
-        <p className="line-clamp-2 text-[11px] font-semibold leading-snug text-foreground group-hover:text-accent-500 sm:text-xs">
+      <div className="flex min-h-0 flex-1 flex-col bg-gradient-to-b from-white to-accent-950/30 p-2.5 sm:p-3">
+        <p className="line-clamp-2 text-[11px] font-bold leading-snug text-foreground transition-colors group-hover:text-accent-600 sm:text-xs">
           {product.name}
         </p>
         {best && (
-          <div className="mt-auto pt-1.5">
-            <p className="text-sm font-bold text-foreground">{formatPrice(best.price)}</p>
+          <div className="mt-auto space-y-0.5 pt-2">
+            <p className="text-base font-bold tracking-tight text-accent-600 sm:text-lg">
+              {formatPrice(best.price)}
+            </p>
             {best.originalPrice && best.originalPrice > best.price && (
-              <p className="text-[10px] text-water-500 line-through">
+              <p className="text-[10px] font-medium text-water-500 line-through sm:text-xs">
                 {formatPrice(best.originalPrice)}
               </p>
             )}
-            <p className="mt-0.5 truncate text-[9px] text-water-500">
+            <p className="truncate text-[9px] font-medium text-water-400 sm:text-[10px]">
               {getStoreNameForOffer(best)}
             </p>
           </div>
@@ -244,7 +246,7 @@ export function HotDealsCarousel({
 
         <div className="overflow-hidden">
           <div
-            className={`flex gap-3 ${animate ? "transition-transform duration-700 ease-in-out" : ""}`}
+            className={`flex gap-4 ${animate ? "transition-transform duration-700 ease-in-out" : ""}`}
             style={{
               transform: `translateX(calc(-1 * ${safeIndex} * (${step})))`,
             }}

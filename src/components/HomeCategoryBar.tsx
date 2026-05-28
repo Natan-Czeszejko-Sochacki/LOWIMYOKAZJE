@@ -2,7 +2,78 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { homeCategoryMenu } from "@/lib/home-category-bar";
+import {
+  homeCategoryMenu,
+  type HomeCategorySubLink,
+} from "@/lib/home-category-bar";
+
+function splitInHalf<T>(items: T[]): [T[], T[]] {
+  const mid = Math.ceil(items.length / 2);
+  return [items.slice(0, mid), items.slice(mid)];
+}
+
+function CategoryDropdownLinks({ items }: { items: HomeCategorySubLink[] }) {
+  return (
+    <>
+      {items.map((child) => (
+        <li key={child.href}>
+          <Link
+            href={child.href}
+            className="block px-4 py-1.5 text-sm text-water-400 transition-colors hover:text-accent-500"
+          >
+            {child.label}
+          </Link>
+        </li>
+      ))}
+    </>
+  );
+}
+
+function CategoryDropdownPanel({
+  href,
+  title,
+  items,
+  twoColumns,
+}: {
+  href: string;
+  title: string;
+  items: HomeCategorySubLink[];
+  twoColumns?: boolean;
+}) {
+  const [left, right] = twoColumns ? splitInHalf(items) : [[], items];
+
+  return (
+    <div
+      className={`absolute left-0 top-full z-[100] pt-1 ${
+        twoColumns ? "min-w-[34rem]" : "min-w-[14rem]"
+      }`}
+    >
+      <div className="rounded-lg border border-water-700 bg-white py-1.5 shadow-lg">
+        <Link
+          href={href}
+          className="block px-4 py-2 text-sm font-medium text-accent-500 transition-colors hover:text-accent-400"
+        >
+          {title}
+        </Link>
+        <div className="my-1 border-t border-water-700" aria-hidden />
+        {twoColumns ? (
+          <div className="grid grid-cols-2 gap-x-2 px-0.5 pb-1">
+            <ul role="list">
+              <CategoryDropdownLinks items={left} />
+            </ul>
+            <ul role="list">
+              <CategoryDropdownLinks items={right} />
+            </ul>
+          </div>
+        ) : (
+          <ul role="list">
+            <CategoryDropdownLinks items={items} />
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function ChevronDown() {
   return (
@@ -67,32 +138,16 @@ export function HomeCategoryBar() {
                 </span>
 
                 {isOpen && (
-                  <div className="absolute left-0 top-full z-[100] min-w-[14rem] pt-1">
-                    <ul
-                      className="rounded-lg border border-water-700 bg-white py-1.5 shadow-lg"
-                      role="list"
-                    >
-                      <li>
-                        <Link
-                          href={item.href}
-                          className="block px-4 py-2 text-sm font-medium text-accent-500 transition-colors hover:text-accent-400"
-                        >
-                          Wszystkie: {item.label}
-                        </Link>
-                      </li>
-                      <li className="my-1 border-t border-water-700" aria-hidden />
-                      {item.children!.map((child) => (
-                        <li key={child.href}>
-                          <Link
-                            href={child.href}
-                            className="block px-4 py-2 text-sm text-water-400 transition-colors hover:text-accent-500"
-                          >
-                            {child.label}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  <CategoryDropdownPanel
+                    href={item.href}
+                    title={
+                      item.href === "/kategorie"
+                        ? item.label
+                        : `Wszystkie: ${item.label}`
+                    }
+                    twoColumns={item.href === "/kategorie"}
+                    items={item.children!}
+                  />
                 )}
               </li>
             );

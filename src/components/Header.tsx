@@ -15,12 +15,6 @@ export function Header() {
 
         <nav className="flex items-center gap-1 sm:gap-2">
           <Link
-            href="/kategorie"
-            className="rounded-lg px-3 py-2 text-sm font-medium text-water-400 hover:bg-water-900 hover:text-accent-500"
-          >
-            Kategorie
-          </Link>
-          <Link
             href="/sklepy"
             className="rounded-lg px-3 py-2 text-sm font-medium text-water-400 hover:bg-water-900 hover:text-accent-500"
           >

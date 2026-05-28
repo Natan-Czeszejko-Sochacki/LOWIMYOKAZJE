@@ -1,3 +1,5 @@
+import { getRootCategories } from "./categories";
+
 export type HomeCategorySubLink = {
   label: string;
   href: string;
@@ -16,20 +18,12 @@ function cat(slug: string): string {
 /** Menu kategorii na stronie głównej — pozycje i podkategorie po najechaniu */
 export const homeCategoryMenu: HomeCategoryMenuItem[] = [
   {
-    label: "Kategorie",
+    label: "Wszystkie kategorie",
     href: "/kategorie",
-    children: [
-      { label: "Kołowrotki", href: cat("kolowrotki") },
-      { label: "Wędki", href: cat("wedki") },
-      { label: "Przynęty", href: cat("przynety") },
-      { label: "Zanęty", href: cat("zanety-i-kulki") },
-      { label: "Żyłki", href: cat("zylki-i-plecionki") },
-      { label: "Haczyki", href: cat("haczyki") },
-      { label: "Spławiki", href: cat("splawiki") },
-      { label: "Elektronika", href: cat("elektronika-wedkarska") },
-      { label: "Namioty", href: cat("namioty-wedkarskie") },
-      { label: "Wszystkie kategorie →", href: "/kategorie" },
-    ],
+    children: getRootCategories().map((c) => ({
+      label: c.name,
+      href: cat(c.slug),
+    })),
   },
   {
     label: "Feeder",

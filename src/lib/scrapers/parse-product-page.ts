@@ -285,7 +285,7 @@ function parseWooCommercePrices($: cheerio.CheerioAPI): {
 }
 
 /** Parsuje widoczną cenę bez łączenia del+ins w jedną liczbę (55.00zł46.75zł → 55.0046). */
-function parseVisiblePrice(el: cheerio.Cheerio<cheerio.Element>): number | null {
+function parseVisiblePrice(el: cheerio.Cheerio<import("domhandler").AnyNode>): number | null {
   if (!el.length) return null;
   if (el.find("ins").length) {
     return parsePolishPrice(el.find("ins .amount, ins .woocommerce-Price-amount").first().text());

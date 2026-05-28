@@ -35,7 +35,7 @@ export function HomeHero() {
       className="border-b border-water-700 bg-cover bg-center bg-no-repeat"
       style={{ backgroundImage: "url('/hero-bg-fishing.png')" }}
     >
-      <div className="bg-white/25">
+      <div className="bg-gradient-to-b from-white/75 via-white/60 to-white/50">
         <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:py-20">
           <div className="mx-auto max-w-4xl space-y-6 lg:space-y-8">
             <div className="space-y-5 sm:space-y-6">
@@ -46,7 +46,7 @@ export function HomeHero() {
                 </span>
                 ? Łowimy Okazje!
               </h1>
-              <p className="max-w-3xl text-lg leading-relaxed text-water-300 sm:text-xl lg:text-2xl">
+              <p className="max-w-3xl text-lg font-medium leading-relaxed text-foreground drop-shadow-[0_1px_12px_rgba(255,255,255,0.85)] sm:text-xl lg:text-2xl">
                 Nie przepłacaj w pojedynczych sklepach. Wpisz nazwę produktu i zobacz, gdzie kupisz go
                 najtaniej.
               </p>

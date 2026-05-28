@@ -1,5 +1,9 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import {
+  CatalogListingGrid,
+  catalogProductGridClassName,
+} from "@/components/CatalogListingGrid";
+import { CatalogPagination } from "@/components/CatalogPagination";
 import { ProductCard } from "@/components/ProductCard";
 import { getCategoryBySlug } from "@/lib/categories";
 import { getCatalogProducts } from "@/lib/catalog";
@@ -15,33 +19,11 @@ function parsePageNumber(value?: string): number {
   return Number.isFinite(page) && page > 0 ? page : 1;
 }
 
-function getPageLinks(currentPage: number, totalPages: number): Array<number | "..."> {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, i) => i + 1);
-  }
-
-  const pages = new Set<number>([1, totalPages]);
-  for (let p = currentPage - 1; p <= currentPage + 1; p++) {
-    if (p > 1 && p < totalPages) pages.add(p);
-  }
-  if (currentPage <= 3) pages.add(2);
-  if (currentPage >= totalPages - 2) pages.add(totalPages - 1);
-
-  const sortedPages = [...pages].sort((a, b) => a - b);
-  const links: Array<number | "..."> = [];
-  for (let i = 0; i < sortedPages.length; i++) {
-    const page = sortedPages[i];
-    const prev = sortedPages[i - 1];
-    if (prev != null && page - prev > 1) links.push("...");
-    links.push(page);
-  }
-  return links;
-}
-
 type Props = {
   params: Promise<{ slug: string }>;
   searchParams: Promise<{
     page?: string;
+    q?: string;
     sort?: string;
     store?: string;
     brand?: string;
@@ -66,7 +48,8 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function CategoryPage({ params, searchParams }: Props) {
   const { slug } = await params;
-  const { page, sort, store, brand, promo, minPrice, maxPrice } = await searchParams;
+  const { page, q, sort, store, brand, promo, minPrice, maxPrice } = await searchParams;
+  const searchQuery = q?.trim() ?? "";
   const category = getCategoryBySlug(slug);
   if (!category) notFound();
 
@@ -92,6 +75,13 @@ export default async function CategoryPage({ params, searchParams }: Props) {
   const results = baseResults
     .filter((p) => {
       const manufacturer = formatManufacturerDisplay(p.brand, p.name) ?? "";
+      if (searchQuery) {
+        const needle = searchQuery.toLowerCase();
+        const inName = p.name.toLowerCase().includes(needle);
+        const inBrand = (p.brand ?? "").toLowerCase().includes(needle);
+        const inManufacturer = manufacturer.toLowerCase().includes(needle);
+        if (!inName && !inBrand && !inManufacturer) return false;
+      }
       if (selectedStore && !p.offers.some((o) => o.storeId === selectedStore)) return false;
       if (selectedBrand && manufacturer.toLowerCase() !== selectedBrand.toLowerCase()) return false;
       if (minPromoValue > 0 && p.discountPercent < minPromoValue) return false;
@@ -126,6 +116,7 @@ export default async function CategoryPage({ params, searchParams }: Props) {
 
   const pageHref = (targetPage: number) => {
     const params = new URLSearchParams();
+    if (searchQuery) params.set("q", searchQuery);
     if (selectedSort && selectedSort !== "relevance") params.set("sort", selectedSort);
     if (selectedStore) params.set("store", selectedStore);
     if (selectedBrand) params.set("brand", selectedBrand);
@@ -142,14 +133,64 @@ export default async function CategoryPage({ params, searchParams }: Props) {
       <div className="mb-8">
         <span className="text-4xl">{category.icon}</span>
         <h1 className="mt-2 text-3xl font-bold text-foreground">{category.name}</h1>
-        <p className="mt-2 text-water-400">{category.description}</p>
+
+        <form
+          action={`/kategoria/${encodeURIComponent(slug)}`}
+          method="get"
+          className="mt-4 max-w-2xl"
+          role="search"
+        >
+          {selectedSort && selectedSort !== "relevance" && (
+            <input type="hidden" name="sort" value={selectedSort} />
+          )}
+          {selectedStore && <input type="hidden" name="store" value={selectedStore} />}
+          {selectedBrand && <input type="hidden" name="brand" value={selectedBrand} />}
+          {minPromoValue > 0 && <input type="hidden" name="promo" value={String(minPromoValue)} />}
+          {minPrice?.trim() && <input type="hidden" name="minPrice" value={minPrice.trim()} />}
+          {maxPrice?.trim() && <input type="hidden" name="maxPrice" value={maxPrice.trim()} />}
+          <div className="relative">
+            <input
+              type="search"
+              name="q"
+              defaultValue={searchQuery}
+              placeholder={`Szukaj po nazwie w „${category.name}"…`}
+              className="w-full rounded-xl border border-water-700 bg-white py-3 pl-11 pr-24 text-foreground shadow-sm placeholder:text-water-500 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 sm:py-3.5"
+            />
+            <span
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-lg text-water-500"
+              aria-hidden
+            >
+              🔍
+            </span>
+            <button
+              type="submit"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-400"
+            >
+              Szukaj
+            </button>
+          </div>
+        </form>
+
+        <p className="mt-4 text-water-400">{category.description}</p>
         <p className="mt-1 text-sm text-water-500">
-          {results.length} z {baseResults.length} produktów · porównanie w 20 sklepach
+          {results.length} z {baseResults.length} produktów
+          {searchQuery ? ` dla „${searchQuery}"` : ""} · porównanie w 20 sklepach
         </p>
       </div>
 
-      <div className="mt-10 grid gap-8 lg:grid-cols-[18rem_minmax(0,1fr)]">
-        <aside className="h-fit rounded-xl border border-water-700 bg-white p-4 shadow-sm lg:sticky lg:top-24">
+      <CatalogListingGrid
+        topPagination={
+          products.length > 0 ? (
+            <CatalogPagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              pageHref={pageHref}
+              ariaLabel="Paginacja kategorii"
+            />
+          ) : undefined
+        }
+        sidebar={
+          <aside className="h-fit rounded-xl border border-water-700 bg-white p-4 shadow-sm lg:sticky lg:top-24">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">
             Sortowanie i filtry
           </h2>
@@ -158,6 +199,8 @@ export default async function CategoryPage({ params, searchParams }: Props) {
             method="get"
             className="mt-4 space-y-4"
           >
+            {searchQuery && <input type="hidden" name="q" value={searchQuery} />}
+
             <label className="block text-sm">
               <span className="mb-1 block font-medium text-water-500">Sortuj</span>
               <select
@@ -263,119 +306,33 @@ export default async function CategoryPage({ params, searchParams }: Props) {
               </a>
             </div>
           </form>
-        </aside>
-        <div className="relative">
-          {products.length > 0 && totalPages > 1 && (
-            <div className="mb-4 flex justify-end lg:absolute lg:right-0 lg:-top-12 lg:mb-0">
-              <nav className="flex flex-wrap items-center gap-2" aria-label="Paginacja kategorii">
-                <Link
-                  href={pageHref(Math.max(1, currentPage - 1))}
-                  className={`rounded-md border px-3 py-1.5 text-sm transition ${
-                    currentPage === 1
-                      ? "pointer-events-none border-water-700 text-water-500 opacity-50"
-                      : "border-water-700 text-foreground hover:bg-water-900"
-                  }`}
-                  aria-disabled={currentPage === 1}
-                >
-                  Poprzednia
-                </Link>
-                {getPageLinks(currentPage, totalPages).map((entry, index) =>
-                  entry === "..." ? (
-                    <span key={`ellipsis-${index}`} className="px-1 text-water-500">
-                      ...
-                    </span>
-                  ) : (
-                    <Link
-                      key={entry}
-                      href={pageHref(entry)}
-                      aria-current={entry === currentPage ? "page" : undefined}
-                      className={`rounded-md border px-3 py-1.5 text-sm transition ${
-                        entry === currentPage
-                          ? "border-accent-500 bg-accent-500 text-white"
-                          : "border-water-700 text-foreground hover:bg-water-900"
-                      }`}
-                    >
-                      {entry}
-                    </Link>
-                  )
-                )}
-                <Link
-                  href={pageHref(Math.min(totalPages, currentPage + 1))}
-                  className={`rounded-md border px-3 py-1.5 text-sm transition ${
-                    currentPage === totalPages
-                      ? "pointer-events-none border-water-700 text-water-500 opacity-50"
-                      : "border-water-700 text-foreground hover:bg-water-900"
-                  }`}
-                  aria-disabled={currentPage === totalPages}
-                >
-                  Następna
-                </Link>
-              </nav>
+          </aside>
+        }
+      >
+        {products.length > 0 ? (
+          <>
+            <div className={catalogProductGridClassName}>
+              {products.map((p) => (
+                <ProductCard key={p.id} product={p} />
+              ))}
             </div>
-          )}
-
-          {products.length > 0 ? (
-            <>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {products.map((p) => (
-                  <ProductCard key={p.id} product={p} />
-                ))}
-              </div>
-              {totalPages > 1 && (
-                <div className="mt-6 flex justify-end">
-                  <nav className="flex flex-wrap items-center gap-2" aria-label="Paginacja kategorii dół">
-                    <Link
-                      href={pageHref(Math.max(1, currentPage - 1))}
-                      className={`rounded-md border px-3 py-1.5 text-sm transition ${
-                        currentPage === 1
-                          ? "pointer-events-none border-water-700 text-water-500 opacity-50"
-                          : "border-water-700 text-foreground hover:bg-water-900"
-                      }`}
-                      aria-disabled={currentPage === 1}
-                    >
-                      Poprzednia
-                    </Link>
-                    {getPageLinks(currentPage, totalPages).map((entry, index) =>
-                      entry === "..." ? (
-                        <span key={`ellipsis-bottom-${index}`} className="px-1 text-water-500">
-                          ...
-                        </span>
-                      ) : (
-                        <Link
-                          key={`bottom-${entry}`}
-                          href={pageHref(entry)}
-                          aria-current={entry === currentPage ? "page" : undefined}
-                          className={`rounded-md border px-3 py-1.5 text-sm transition ${
-                            entry === currentPage
-                              ? "border-accent-500 bg-accent-500 text-white"
-                              : "border-water-700 text-foreground hover:bg-water-900"
-                          }`}
-                        >
-                          {entry}
-                        </Link>
-                      )
-                    )}
-                    <Link
-                      href={pageHref(Math.min(totalPages, currentPage + 1))}
-                      className={`rounded-md border px-3 py-1.5 text-sm transition ${
-                        currentPage === totalPages
-                          ? "pointer-events-none border-water-700 text-water-500 opacity-50"
-                          : "border-water-700 text-foreground hover:bg-water-900"
-                      }`}
-                      aria-disabled={currentPage === totalPages}
-                    >
-                      Następna
-                    </Link>
-                  </nav>
-                </div>
-              )}
-            </>
-          ) : (
-            <p className="text-water-500">Nie znaleziono produktów dla wybranych filtrów.</p>
-          )}
-        </div>
-
-      </div>
+            <CatalogPagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              pageHref={pageHref}
+              ariaLabel="Paginacja kategorii — dół"
+              className="mt-6"
+              idSuffix="-bottom"
+            />
+          </>
+        ) : (
+          <p className="text-water-500">
+            {searchQuery
+              ? `Brak produktów pasujących do „${searchQuery}" w tej kategorii.`
+              : "Nie znaleziono produktów dla wybranych filtrów."}
+          </p>
+        )}
+      </CatalogListingGrid>
     </div>
   );
 }

@@ -44,3 +44,38 @@ body {
   color: var(--foreground);
   min-height: 100vh;
 }
+
+@keyframes store-marquee-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.store-marquee-track {
+  animation: store-marquee-scroll 75s linear infinite;
+}
+
+.store-marquee:hover .store-marquee-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .store-marquee {
+    overflow: visible;
+  }
+
+  .store-marquee-track {
+    animation: none;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    gap: 0.75rem;
+  }
+
+  .store-marquee-item {
+    flex-shrink: 1;
+  }
+}
