@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ŁowimyOkazje.pl
 
-## Getting Started
+Porównywarka cen wędkarskich — **wyłącznie 20 wybranych sklepów**, pełny katalog produktów ze **bezpośrednimi linkami** do kart produktów.
 
-First, run the development server:
+## Sklepy w porównywarce
+
+AngryFish, Big Fish, CarpRide, Centrum Wędkarskie, E-Amur, Ehooks, FatFish, Feederland, Haczykowo, Karpiowa Chata, Karpiowy, MatchSklep, Moonfin, RM Rybka, Roach Shop, Rockworld, Sklep Drapieżnik, Sklep Miętus, Sklep Rybka, Wedkarski.
+
+## Uruchomienie
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Otwórz http://localhost:3000 i kliknij **„Odśwież ceny”** — pierwsza synchronizacja pobiera produkty ze wszystkich sklepów (30–90 minut, zależnie od liczby produktów).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Synchronizacja co 5 godzin
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Automatycznie przy działającym serwerze (`src/instrumentation.ts`)
+- Na Vercel: `vercel.json` cron
+- Ręcznie: `npm run sync` (serwer musi działać)
 
-## Learn More
+## Jak działają dane
 
-To learn more about Next.js, take a look at the following resources:
+1. Zbieranie URL-i produktów z sitemapów / kategorii każdego sklepu  
+2. Pobranie strony produktu → **cena, zdjęcie, nazwa, link bezpośredni**  
+3. Zapis w SQLite (`data/catalog.db`)  
+4. Grupowanie podobnych produktów (EAN lub znormalizowana nazwa) do porównania cen  
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Skrypty
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+# Pełna synchronizacja (przez API)
+npm run sync
 
-## Deploy on Vercel
+# Jeden sklep (test)
+npx tsx scripts/test-sync.mjs wedkarski
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# Limit produktów (test)
+$env:CATALOG_SYNC_LIMIT=20; npx tsx scripts/test-sync.mjs carpride
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Produkcja
+
+```bash
+npm run build
+npm start
+```
+
+Ustaw `CRON_SECRET` w `.env` (patrz `.env.example`).

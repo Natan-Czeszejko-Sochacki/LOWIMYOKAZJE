@@ -2,7 +2,21 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0f172a;
+  --accent: #059669;
+  --water-950: #ffffff;
+  --water-900: #f8fafc;
+  --water-800: #f1f5f9;
+  --water-700: #e2e8f0;
+  --water-600: #94a3b8;
+  --water-500: #64748b;
+  --water-400: #475569;
+  --water-300: #334155;
+  --water-200: #1e293b;
+  --accent-500: #059669;
+  --accent-400: #10b981;
+  --accent-300: #34d399;
+  --accent-950: #ecfdf5;
 }
 
 @theme inline {
@@ -10,17 +24,23 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-water-950: var(--water-950);
+  --color-water-900: var(--water-900);
+  --color-water-800: var(--water-800);
+  --color-water-700: var(--water-700);
+  --color-water-600: var(--water-600);
+  --color-water-500: var(--water-500);
+  --color-water-400: var(--water-400);
+  --color-water-300: var(--water-300);
+  --color-water-200: var(--water-200);
+  --color-accent-500: var(--accent-500);
+  --color-accent-400: var(--accent-400);
+  --color-accent-300: var(--accent-300);
+  --color-accent-950: var(--accent-950);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100vh;
 }

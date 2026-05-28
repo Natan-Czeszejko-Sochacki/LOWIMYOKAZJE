@@ -1,0 +1,10 @@
+import Database from "better-sqlite3";
+const db = new Database("./data/catalog.db");
+const total = db.prepare("SELECT COUNT(*) as c FROM listings").get();
+const noBrand = db.prepare("SELECT COUNT(*) as c FROM listings WHERE brand IS NULL OR brand = ''").get();
+const sample = db.prepare("SELECT store_id, name, brand FROM listings WHERE brand IS NOT NULL LIMIT 10").all();
+console.log("Total listings:", total.c);
+console.log("No brand:", noBrand.c);
+console.log("With brand:", total.c - noBrand.c);
+console.log("\nSample with brand:");
+sample.forEach(r => console.log(` [${r.store_id}] ${r.brand} | ${r.name.slice(0,50)}`));

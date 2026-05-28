@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# scraped catalog database
+/data/catalog.db
+/data/catalog.db-*
+/data/offers.json
+/data/catalog-cache.json
+.sync-paused

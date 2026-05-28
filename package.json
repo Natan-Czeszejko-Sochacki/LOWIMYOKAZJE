@@ -6,15 +6,25 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "sync": "node scripts/sync-prices.mjs",
+    "sync:resume": "npx tsx scripts/resume-sync.mjs",
+    "purge-empty": "npx tsx scripts/purge-empty-listings.mjs",
+    "merge-groups": "npx tsx scripts/merge-duplicate-groups.mjs",
+    "fix-categories": "npx tsx scripts/fix-categories.mjs",
+    "postinstall": "npm rebuild better-sqlite3"
   },
   "dependencies": {
+    "better-sqlite3": "^12.10.0",
+    "cheerio": "^1.2.0",
     "next": "16.2.6",
+    "node-cron": "^4.2.1",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
