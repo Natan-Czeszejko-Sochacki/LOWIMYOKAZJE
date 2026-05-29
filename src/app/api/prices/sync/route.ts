@@ -3,7 +3,7 @@ import { syncAllStorePrices } from "@/lib/price-sync";
 import { isSyncPaused } from "@/lib/sync-control-node";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 900;
+export const maxDuration = 300;
 
 function isAuthorized(request: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
