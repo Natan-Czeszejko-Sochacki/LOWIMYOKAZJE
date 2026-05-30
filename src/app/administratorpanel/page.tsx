@@ -24,9 +24,11 @@ export default async function AdministratorPanelPage({ searchParams }: Props) {
   const params = await searchParams;
   const { minStores, maxStores } = parseStoreRange(params.min, params.max);
 
-  const overview = await getAdminOverview();
-  const filteredCount = await countMultiStoreProducts(minStores, maxStores);
-  const products = await getMultiStoreProducts(minStores, maxStores, 200);
+  const [overview, filteredCount, products] = await Promise.all([
+    getAdminOverview(),
+    countMultiStoreProducts(minStores, maxStores),
+    getMultiStoreProducts(minStores, maxStores, 200),
+  ]);
 
   return (
     <AdminPanel

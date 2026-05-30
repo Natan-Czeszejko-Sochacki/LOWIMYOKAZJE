@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    optimizePackageImports: ["@/lib/categories", "@/lib/stores"],
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "image.ceneostatic.pl", pathname: "/**" },

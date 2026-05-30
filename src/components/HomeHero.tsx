@@ -1,3 +1,4 @@
+import { GlobalSearchForm } from "@/components/catalog/GlobalSearchForm";
 import { ScrollToHotDealsCTA } from "@/components/ScrollToHotDealsCTA";
 
 const heroHighlights = [
@@ -62,26 +63,12 @@ export function HomeHero() {
               </ul>
             </div>
 
-            <form action="/szukaj" method="get">
-              <div className="relative">
-                <input
-                  type="search"
-                  name="q"
-                  minLength={2}
-                  placeholder="np. Shimano, kołowrotek, wobbler, wędka karpiowa…"
-                  className="w-full rounded-2xl border border-water-700 bg-white py-5 pl-14 pr-28 text-lg text-foreground shadow-md placeholder:text-water-500 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 sm:py-6 sm:pl-16 sm:pr-32 sm:text-xl"
-                />
-                <span className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-2xl text-water-500 sm:left-6 sm:text-3xl">
-                  🔍
-                </span>
-                <button
-                  type="submit"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-accent-500 px-5 py-2.5 text-base font-semibold text-white hover:bg-accent-400 sm:right-3 sm:px-6 sm:py-3 sm:text-lg"
-                >
-                  Szukaj
-                </button>
-              </div>
-            </form>
+            <GlobalSearchForm
+              showIcon
+              inputClassName="w-full rounded-2xl border border-water-700 bg-white py-5 pl-14 pr-28 text-lg text-foreground shadow-md placeholder:text-water-500 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 sm:py-6 sm:pl-16 sm:pr-32 sm:text-xl"
+              buttonClassName="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-accent-500 px-5 py-2.5 text-base font-semibold text-white hover:bg-accent-400 sm:right-3 sm:px-6 sm:py-3 sm:text-lg"
+              placeholder="np. Shimano, kołowrotek, wobbler, wędka karpiowa…"
+            />
 
             <ScrollToHotDealsCTA />
           </div>

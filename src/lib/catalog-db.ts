@@ -319,6 +319,8 @@ export type SearchListingFilters = {
   sort?: string;
   page?: number;
   limit?: number;
+  /** false = szybszy pierwszy render (facety osobno). */
+  includeFacets?: boolean;
 };
 
 export type SearchPageResult = {
@@ -531,6 +533,7 @@ export async function getSearchPageListingUncached(
       AND l.price > 0
     WHERE ${textMatch}`;
 
+  const includeFacets = filters.includeFacets !== false;
   const [countRow, totalMatchesRow, facetStores, facetBrands] = await Promise.all([
     queryOne<{ c: number }>(
       `SELECT COUNT(*)::int AS c FROM (
@@ -546,14 +549,18 @@ export async function getSearchPageListingUncached(
           baseParams
         )
       : Promise.resolve(undefined),
-    queryRows<{ store_id: string }>(
-      `SELECT DISTINCT l.store_id ${facetFrom}`,
-      facetParams
-    ),
-    queryRows<{ brand: string | null; name: string }>(
-      `SELECT DISTINCT g.brand, g.name ${facetFrom}`,
-      facetParams
-    ),
+    includeFacets
+      ? queryRows<{ store_id: string }>(
+          `SELECT DISTINCT l.store_id ${facetFrom}`,
+          facetParams
+        )
+      : Promise.resolve([]),
+    includeFacets
+      ? queryRows<{ brand: string | null; name: string }>(
+          `SELECT DISTINCT g.brand, g.name ${facetFrom}`,
+          facetParams
+        )
+      : Promise.resolve([]),
   ]);
 
   const totalFiltered = countRow?.c ?? 0;
@@ -605,26 +612,31 @@ async function getSearchPageListingFast(
 
   const safeOffsetGuess = (page - 1) * limit;
 
+  const includeFacets = filters.includeFacets !== false;
   const [countRow, facetStores, facetBrands, groups] = await Promise.all([
     queryOne<{ c: number }>(
       `${prefix} SELECT COUNT(*)::int AS c FROM matched`,
       matchedParams
     ),
-    queryRows<{ store_id: string }>(
-      `${prefix}
+    includeFacets
+      ? queryRows<{ store_id: string }>(
+          `${prefix}
        SELECT DISTINCT l.store_id
        FROM listings l
        INNER JOIN matched m ON m.id = l.group_id
        WHERE l.store_id IN (${storeIn}) AND l.price > 0`,
-      [...matchedParams, ...ALLOWED_STORE_IDS_LIST]
-    ),
-    queryRows<{ brand: string | null; name: string }>(
-      `${prefix}
+          [...matchedParams, ...ALLOWED_STORE_IDS_LIST]
+        )
+      : Promise.resolve([]),
+    includeFacets
+      ? queryRows<{ brand: string | null; name: string }>(
+          `${prefix}
        SELECT DISTINCT g.brand, g.name
        FROM product_groups g
        INNER JOIN matched m ON m.id = g.id`,
-      matchedParams
-    ),
+          matchedParams
+        )
+      : Promise.resolve([]),
     queryRows<GroupRow>(
       `${prefix}
        SELECT ${GROUP_SELECT}
@@ -693,6 +705,7 @@ export type CategoryListingFilters = {
   sort?: string;
   page?: number;
   limit?: number;
+  includeFacets?: boolean;
 };
 
 export type CategoryPageResult = {
@@ -785,6 +798,7 @@ export async function getCategoryPageListingUncached(
 
   const baseParams = [...ALLOWED_STORE_IDS_LIST, ...categorySlugs, ...filterParams];
 
+  const includeFacets = filters.includeFacets !== false;
   const [countRow, facetStores, facetBrands, totalInCategory] = await Promise.all([
     queryOne<{ c: number }>(
       `SELECT COUNT(*)::int AS c FROM (
@@ -794,24 +808,28 @@ export async function getCategoryPageListingUncached(
       ) counted`,
       baseParams
     ),
-    queryRows<{ store_id: string }>(
-      `SELECT DISTINCT l.store_id
+    includeFacets
+      ? queryRows<{ store_id: string }>(
+          `SELECT DISTINCT l.store_id
        FROM listings l
        INNER JOIN product_groups g ON g.id = l.group_id
        WHERE g.category_id IN (${catIn})
          AND l.store_id IN (${storeIn})
          AND l.price > 0`,
-      [...categorySlugs, ...ALLOWED_STORE_IDS_LIST]
-    ),
-    queryRows<{ brand: string | null; name: string }>(
-      `SELECT DISTINCT g.brand, g.name
+          [...categorySlugs, ...ALLOWED_STORE_IDS_LIST]
+        )
+      : Promise.resolve([]),
+    includeFacets
+      ? queryRows<{ brand: string | null; name: string }>(
+          `SELECT DISTINCT g.brand, g.name
        FROM product_groups g
        INNER JOIN listings l ON l.group_id = g.id
          AND l.store_id IN (${storeIn})
          AND l.price > 0
        WHERE g.category_id IN (${catIn})`,
-      [...ALLOWED_STORE_IDS_LIST, ...categorySlugs]
-    ),
+          [...ALLOWED_STORE_IDS_LIST, ...categorySlugs]
+        )
+      : Promise.resolve([]),
     queryOne<{ c: number }>(
       `SELECT COUNT(*)::int AS c
        FROM product_groups g
@@ -885,27 +903,32 @@ async function getCategoryPageListingFast(
 
   const safeOffsetGuess = (page - 1) * limit;
 
+  const includeFacets = filters.includeFacets !== false;
   const [countRow, facetStores, facetBrands, groups] = await Promise.all([
     queryOne<{ c: number }>(
       `SELECT COUNT(*)::int AS c FROM product_groups g WHERE ${baseWhere}`,
       baseParams
     ),
-    queryRows<{ store_id: string }>(
-      `SELECT DISTINCT l.store_id
+    includeFacets
+      ? queryRows<{ store_id: string }>(
+          `SELECT DISTINCT l.store_id
        FROM listings l
        INNER JOIN product_groups g ON g.id = l.group_id
        WHERE g.category_id IN (${catIn})
          AND l.store_id IN (${storeIn})
          AND l.price > 0`,
-      [...categorySlugs, ...ALLOWED_STORE_IDS_LIST]
-    ),
-    queryRows<{ brand: string | null; name: string }>(
-      `SELECT DISTINCT g.brand, g.name
+          [...categorySlugs, ...ALLOWED_STORE_IDS_LIST]
+        )
+      : Promise.resolve([]),
+    includeFacets
+      ? queryRows<{ brand: string | null; name: string }>(
+          `SELECT DISTINCT g.brand, g.name
        FROM product_groups g
        WHERE g.category_id IN (${catIn})
          AND ${stockExists}`,
-      baseParams
-    ),
+          baseParams
+        )
+      : Promise.resolve([]),
     queryRows<GroupRow>(
       `SELECT ${GROUP_SELECT}
        FROM product_groups g
@@ -949,6 +972,181 @@ async function getCategoryPageListingFast(
     brandOptions: mapFacetBrands(facetBrands),
     currentPage,
     totalPages,
+  };
+}
+
+export async function getSearchFacetsUncached(
+  filters: SearchListingFilters
+): Promise<{
+  storeOptions: SearchPageResult["storeOptions"];
+  brandOptions: SearchPageResult["brandOptions"];
+}> {
+  const q = filters.q.trim();
+  if (q.length < 2) {
+    return { storeOptions: [], brandOptions: [] };
+  }
+  const pattern = `%${q}%`;
+  const storeIn = storeInClause();
+
+  if (!isHeavyListingFilters(filters)) {
+    const { prefix, params: matchedParams } = buildSearchMatchedCte(pattern);
+    const [facetStores, facetBrands] = await Promise.all([
+      queryRows<{ store_id: string }>(
+        `${prefix}
+         SELECT DISTINCT l.store_id
+         FROM listings l
+         INNER JOIN matched m ON m.id = l.group_id
+         WHERE l.store_id IN (${storeIn}) AND l.price > 0`,
+        [...matchedParams, ...ALLOWED_STORE_IDS_LIST]
+      ),
+      queryRows<{ brand: string | null; name: string }>(
+        `${prefix}
+         SELECT DISTINCT g.brand, g.name
+         FROM product_groups g
+         INNER JOIN matched m ON m.id = g.id`,
+        matchedParams
+      ),
+    ]);
+    return {
+      storeOptions: mapFacetStores(facetStores),
+      brandOptions: mapFacetBrands(facetBrands),
+    };
+  }
+
+  const filterParams: unknown[] = [pattern, pattern, pattern, pattern, pattern, pattern];
+  const whereExtra: string[] = [];
+  if (filters.store?.trim()) {
+    whereExtra.push(
+      `EXISTS (SELECT 1 FROM listings ls WHERE ls.group_id = g.id AND ls.store_id = ? AND ls.price > 0)`
+    );
+    filterParams.push(filters.store.trim());
+  }
+  if (filters.brand?.trim()) {
+    const brand = filters.brand.trim();
+    whereExtra.push(
+      `(LOWER(TRIM(COALESCE(g.brand, l.brand, ''))) = LOWER(?) OR g.name ILIKE ?)`
+    );
+    filterParams.push(brand, `%${brand}%`);
+  }
+  const textMatch = `(
+    g.name ILIKE ? OR COALESCE(g.brand, '') ILIKE ?
+    OR l.name ILIKE ? OR COALESCE(l.brand, '') ILIKE ?
+    OR COALESCE(l.ean, '') ILIKE ? OR COALESCE(l.producer_code, '') ILIKE ?
+  )`;
+  const extraSql = whereExtra.length ? `AND ${whereExtra.join(" AND ")}` : "";
+  const facetFrom = `
+    FROM product_groups g
+    INNER JOIN listings l ON l.group_id = g.id
+      AND l.store_id IN (${storeIn})
+      AND l.price > 0
+    WHERE ${textMatch}
+    ${extraSql}`;
+  const facetParams = [...ALLOWED_STORE_IDS_LIST, ...filterParams];
+
+  const [facetStores, facetBrands] = await Promise.all([
+    queryRows<{ store_id: string }>(
+      `SELECT DISTINCT l.store_id ${facetFrom}`,
+      facetParams
+    ),
+    queryRows<{ brand: string | null; name: string }>(
+      `SELECT DISTINCT g.brand, g.name ${facetFrom}`,
+      facetParams
+    ),
+  ]);
+  return {
+    storeOptions: mapFacetStores(facetStores),
+    brandOptions: mapFacetBrands(facetBrands),
+  };
+}
+
+export async function getCategoryFacetsUncached(
+  slug: string,
+  filters: CategoryListingFilters
+): Promise<{
+  storeOptions: CategoryPageResult["storeOptions"];
+  brandOptions: CategoryPageResult["brandOptions"];
+}> {
+  const categorySlugs = [...getCategoryDescendantSlugs(slug)];
+  const storeIn = storeInClause();
+  const catIn = categorySlugs.map(() => "?").join(",");
+
+  if (!isHeavyListingFilters(filters, { allowTextInCategory: true })) {
+    const stockExists = `EXISTS (
+      SELECT 1 FROM listings l
+      WHERE l.group_id = g.id
+        AND l.store_id IN (${storeIn})
+        AND l.price > 0
+    )`;
+    const baseParams = [...categorySlugs, ...ALLOWED_STORE_IDS_LIST];
+    const [facetStores, facetBrands] = await Promise.all([
+      queryRows<{ store_id: string }>(
+        `SELECT DISTINCT l.store_id
+         FROM listings l
+         INNER JOIN product_groups g ON g.id = l.group_id
+         WHERE g.category_id IN (${catIn})
+           AND l.store_id IN (${storeIn})
+           AND l.price > 0`,
+        [...categorySlugs, ...ALLOWED_STORE_IDS_LIST]
+      ),
+      queryRows<{ brand: string | null; name: string }>(
+        `SELECT DISTINCT g.brand, g.name
+         FROM product_groups g
+         WHERE g.category_id IN (${catIn})
+           AND ${stockExists}`,
+        baseParams
+      ),
+    ]);
+    return {
+      storeOptions: mapFacetStores(facetStores),
+      brandOptions: mapFacetBrands(facetBrands),
+    };
+  }
+
+  const filterParams: unknown[] = [];
+  const whereExtra: string[] = [];
+  if (filters.q?.trim()) {
+    const pattern = `%${filters.q.trim()}%`;
+    whereExtra.push(
+      `(g.name ILIKE ? OR COALESCE(g.brand, '') ILIKE ? OR l.name ILIKE ? OR COALESCE(l.brand, '') ILIKE ?)`
+    );
+    filterParams.push(pattern, pattern, pattern, pattern);
+  }
+  if (filters.store?.trim()) {
+    whereExtra.push(
+      `EXISTS (SELECT 1 FROM listings ls WHERE ls.group_id = g.id AND ls.store_id = ? AND ls.price > 0)`
+    );
+    filterParams.push(filters.store.trim());
+  }
+  if (filters.brand?.trim()) {
+    const brand = filters.brand.trim();
+    whereExtra.push(
+      `(LOWER(TRIM(COALESCE(g.brand, l.brand, ''))) = LOWER(?) OR g.name ILIKE ?)`
+    );
+    filterParams.push(brand, `%${brand}%`);
+  }
+  const whereSql = whereExtra.length ? `AND ${whereExtra.join(" AND ")}` : "";
+  const baseFrom = `
+    FROM product_groups g
+    INNER JOIN listings l ON l.group_id = g.id
+      AND l.store_id IN (${storeIn})
+      AND l.price > 0
+    WHERE g.category_id IN (${catIn})
+    ${whereSql}`;
+  const baseParams = [...ALLOWED_STORE_IDS_LIST, ...categorySlugs, ...filterParams];
+
+  const [facetStores, facetBrands] = await Promise.all([
+    queryRows<{ store_id: string }>(
+      `SELECT DISTINCT l.store_id ${baseFrom}`,
+      baseParams
+    ),
+    queryRows<{ brand: string | null; name: string }>(
+      `SELECT DISTINCT g.brand, g.name ${baseFrom}`,
+      baseParams
+    ),
+  ]);
+  return {
+    storeOptions: mapFacetStores(facetStores),
+    brandOptions: mapFacetBrands(facetBrands),
   };
 }
 

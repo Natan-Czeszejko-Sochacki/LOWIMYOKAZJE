@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import {
+  getCategoryFacetsUncached,
   getCategoryPageListingUncached,
   type CategoryListingFilters,
   type CategoryPageResult,
@@ -25,24 +26,25 @@ export function getCategoryPageListing(
   filters: CategoryListingFilters
 ): Promise<CategoryPageResult> {
   const key = filterCacheKey(slug, filters);
-  const hasActiveFilters = Boolean(
-    filters.q ||
-      filters.store ||
-      filters.brand ||
-      (filters.minPromo ?? 0) > 0 ||
-      filters.minPrice != null ||
-      filters.maxPrice != null ||
-      (filters.sort && filters.sort !== "relevance") ||
-      (filters.page ?? 1) > 1
-  );
-
-  if (hasActiveFilters) {
-    return getCategoryPageListingUncached(slug, filters);
-  }
-
+  const includeFacets = filters.includeFacets !== false;
   return unstable_cache(
-    () => getCategoryPageListingUncached(slug, filters),
-    ["category-default-v3", key],
+    () => getCategoryPageListingUncached(slug, { ...filters, includeFacets }),
+    ["category-v4", key, includeFacets ? "f" : "nf"],
+    { revalidate: 300, tags: [`category-${slug}`] }
+  )();
+}
+
+export function getCategoryFacets(
+  slug: string,
+  filters: CategoryListingFilters
+): Promise<{
+  storeOptions: CategoryPageResult["storeOptions"];
+  brandOptions: CategoryPageResult["brandOptions"];
+}> {
+  const key = `facets|${filterCacheKey(slug, filters)}`;
+  return unstable_cache(
+    () => getCategoryFacetsUncached(slug, filters),
+    ["category-facets-v1", key],
     { revalidate: 300, tags: [`category-${slug}`] }
   )();
 }

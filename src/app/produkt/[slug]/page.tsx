@@ -3,7 +3,7 @@ import Link from "next/link";
 import { PriceTable } from "@/components/PriceTable";
 import { ProductImage } from "@/components/ProductImage";
 import { AddToCartButton } from "@/components/AddToCartButton";
-import { getProductWithOffers } from "@/lib/catalog";
+import { getProductWithOffers } from "@/lib/product-cache";
 import { resolveCategory } from "@/lib/categories";
 import { formatManufacturerDisplay } from "@/lib/product-matcher";
 import {
@@ -14,7 +14,7 @@ import {
   effectiveOriginalPrice,
 } from "@/lib/price-engine";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 type Props = { params: Promise<{ slug: string }> };
 

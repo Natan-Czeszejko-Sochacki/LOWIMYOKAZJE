@@ -1,11 +1,14 @@
 import { unstable_cache } from "next/cache";
 import {
+  getSearchFacetsUncached,
   getSearchPageListingUncached,
   type SearchListingFilters,
   type SearchPageResult,
 } from "./catalog-db";
 
-export const MIN_SEARCH_QUERY_LENGTH = 2;
+import { MIN_SEARCH_QUERY_LENGTH } from "./search-constants";
+
+export { MIN_SEARCH_QUERY_LENGTH };
 
 function filterCacheKey(filters: SearchListingFilters): string {
   return [
@@ -37,24 +40,27 @@ export function getSearchPageListing(
     });
   }
 
-  const hasActiveFilters = Boolean(
-    filters.store ||
-      filters.brand ||
-      (filters.minPromo ?? 0) > 0 ||
-      filters.minPrice != null ||
-      filters.maxPrice != null ||
-      (filters.sort && filters.sort !== "relevance") ||
-      (filters.page ?? 1) > 1
-  );
-
-  if (hasActiveFilters) {
-    return getSearchPageListingUncached(filters);
-  }
-
   const key = filterCacheKey(filters);
+  const includeFacets = filters.includeFacets !== false;
   return unstable_cache(
-    () => getSearchPageListingUncached(filters),
-    ["search-v3", key],
+    () => getSearchPageListingUncached({ ...filters, includeFacets }),
+    ["search-v4", key, includeFacets ? "f" : "nf"],
+    { revalidate: 300 }
+  )();
+}
+
+export function getSearchFacets(filters: SearchListingFilters): Promise<{
+  storeOptions: SearchPageResult["storeOptions"];
+  brandOptions: SearchPageResult["brandOptions"];
+}> {
+  const q = filters.q.trim();
+  if (q.length < MIN_SEARCH_QUERY_LENGTH) {
+    return Promise.resolve({ storeOptions: [], brandOptions: [] });
+  }
+  const key = `facets|${filterCacheKey(filters)}`;
+  return unstable_cache(
+    () => getSearchFacetsUncached(filters),
+    ["search-facets-v1", key],
     { revalidate: 300 }
   )();
 }
