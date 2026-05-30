@@ -49,6 +49,8 @@ npm run build
 npm start
 ```
 
-Ustaw w Vercel: `DATABASE_URL` (pooler, port 6543) oraz opcjonalnie `CRON_SECRET` (patrz `.env.example`).
+Ustaw w Vercel: `DATABASE_URL` (pooler, port 6543), `NEXT_PUBLIC_SITE_URL` (np. `https://lowimyokazje.pl`) oraz opcjonalnie `CRON_SECRET` (patrz `.env.example`).
+
+**Domena i podgląd linków (Facebook, Messenger):** w Vercel → Settings → Domains ustaw **jedną** domenę kanoniczną. Nie konfiguruj jednocześnie przekierowania apex→www na Vercel i www→apex w aplikacji — powstaje pętla i crawler nie pobierze `LOGO.png`. Po wdrożeniu odśwież cache: [Sharing Debugger](https://developers.facebook.com/tools/debug/) → wpisz URL → „Scrape Again”.
 
 **Pierwszy import danych:** uruchom schemat `supabase/migrations/001_schema.sql` w Supabase SQL Editor, potem lokalnie `npm run db:migrate` (wymaga `data/catalog.db`).

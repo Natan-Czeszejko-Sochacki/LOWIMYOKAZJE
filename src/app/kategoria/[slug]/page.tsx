@@ -11,6 +11,7 @@ import {
 } from "@/lib/catalog-params";
 import { getCategoryPageListing } from "@/lib/category-catalog";
 import { getCategoryBySlug } from "@/lib/categories";
+import { pageMetadata } from "@/lib/site-metadata";
 
 export const revalidate = 300;
 
@@ -31,7 +32,11 @@ type Props = {
 export async function generateMetadata({ params }: Props) {
   const { slug } = await params;
   const cat = getCategoryBySlug(slug);
-  return { title: cat?.name ?? "Kategoria" };
+  const name = cat?.name ?? "Kategoria";
+  return pageMetadata({
+    title: name,
+    description: `${name} — porównaj ceny w polskich sklepach wędkarskich na ŁowimyOkazje.pl`,
+  });
 }
 
 export default async function CategoryPage({ params, searchParams }: Props) {

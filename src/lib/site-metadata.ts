@@ -17,8 +17,9 @@ export const DEFAULT_DESCRIPTION =
 /** Logo używane w podglądzie linków (Messenger, WhatsApp, Facebook itd.) */
 export const OG_IMAGE = {
   url: "/LOGO.png",
-  width: 800,
-  height: 800,
+  width: 955,
+  height: 418,
+  type: "image/png",
   alt: "ŁowimyOkazje.pl — porównywarka cen wędkarskich",
 } as const;
 

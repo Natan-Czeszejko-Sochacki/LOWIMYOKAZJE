@@ -4,16 +4,6 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["@/lib/categories", "@/lib/stores"],
   },
-  async redirects() {
-    return [
-      {
-        source: "/:path*",
-        has: [{ type: "host", value: "www.lowimyokazje.pl" }],
-        destination: "https://lowimyokazje.pl/:path*",
-        permanent: true,
-      },
-    ];
-  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "image.ceneostatic.pl", pathname: "/**" },
