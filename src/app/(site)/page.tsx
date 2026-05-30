@@ -24,7 +24,7 @@ export default async function HomePage() {
 
       <section
         id={HOT_DEALS_SECTION_ID}
-        className="scroll-mt-36 border-b border-water-700 bg-white"
+        className="scroll-mt-28 border-b border-water-700 bg-white sm:scroll-mt-36"
       >
         <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12">
           <HotDealsCarousel deals={deals} />

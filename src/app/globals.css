@@ -39,10 +39,33 @@
   --color-accent-950: var(--accent-950);
 }
 
+html {
+  overflow-x: clip;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: clip;
+}
+
+/* Ukryty scrollbar przy poziomym przewijaniu (np. pasek kategorii) */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Bezpieczne marginesy na urządzeniach z wycięciem (notch) */
+.safe-area-x {
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+  padding-right: max(0.75rem, env(safe-area-inset-right));
 }
 
 @keyframes store-marquee-scroll {

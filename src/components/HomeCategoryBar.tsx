@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   homeCategoryMenu,
   type HomeCategorySubLink,
@@ -19,7 +19,7 @@ function CategoryDropdownLinks({ items }: { items: HomeCategorySubLink[] }) {
         <li key={child.href}>
           <Link
             href={child.href}
-            className="block px-4 py-1.5 text-sm text-water-400 transition-colors hover:text-accent-500"
+            className="block px-4 py-2 text-sm text-water-400 transition-colors hover:text-accent-500 active:bg-water-900"
           >
             {child.label}
           </Link>
@@ -34,30 +34,33 @@ function CategoryDropdownPanel({
   title,
   items,
   twoColumns,
+  onNavigate,
 }: {
   href: string;
   title: string;
   items: HomeCategorySubLink[];
   twoColumns?: boolean;
+  onNavigate?: () => void;
 }) {
   const [left, right] = twoColumns ? splitInHalf(items) : [[], items];
 
   return (
     <div
-      className={`absolute left-0 top-full z-[100] pt-1 ${
-        twoColumns ? "min-w-[34rem]" : "min-w-[14rem]"
+      className={`z-[100] pt-1 md:absolute md:left-0 md:top-full ${
+        twoColumns ? "md:min-w-[34rem]" : "md:min-w-[14rem]"
       }`}
     >
       <div className="rounded-lg border border-water-700 bg-white py-1.5 shadow-lg">
         <Link
           href={href}
-          className="block px-4 py-2 text-sm font-medium text-accent-500 transition-colors hover:text-accent-400"
+          onClick={onNavigate}
+          className="block px-4 py-2 text-sm font-medium text-accent-500 transition-colors hover:text-accent-400 active:bg-water-900"
         >
           {title}
         </Link>
         <div className="my-1 border-t border-water-700" aria-hidden />
         {twoColumns ? (
-          <div className="grid grid-cols-2 gap-x-2 px-0.5 pb-1">
+          <div className="grid grid-cols-1 gap-x-2 px-0.5 pb-1 sm:grid-cols-2">
             <ul role="list">
               <CategoryDropdownLinks items={left} />
             </ul>
@@ -75,10 +78,10 @@ function CategoryDropdownPanel({
   );
 }
 
-function ChevronDown() {
+function ChevronDown({ open }: { open: boolean }) {
   return (
     <svg
-      className="h-3.5 w-3.5 shrink-0 opacity-70"
+      className={`h-3.5 w-3.5 shrink-0 opacity-70 transition-transform ${open ? "rotate-180" : ""}`}
       viewBox="0 0 20 20"
       fill="currentColor"
       aria-hidden
@@ -94,14 +97,31 @@ function ChevronDown() {
 
 export function HomeCategoryBar() {
   const [openLabel, setOpenLabel] = useState<string | null>(null);
+  const navRef = useRef<HTMLElement>(null);
+
+  const close = useCallback(() => setOpenLabel(null), []);
+
+  useEffect(() => {
+    if (!openLabel) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (!navRef.current?.contains(e.target as Node)) close();
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [openLabel, close]);
+
+  const toggle = (label: string) => {
+    setOpenLabel((prev) => (prev === label ? null : label));
+  };
 
   return (
     <nav
+      ref={navRef}
       aria-label="Nawigacja kategorii strony głównej"
       className="relative border-b border-water-700 bg-white"
     >
-      <div className="mx-auto max-w-7xl overflow-visible px-2 sm:px-4">
-        <ul className="flex flex-wrap items-stretch gap-0 overflow-visible">
+      <div className="mx-auto max-w-7xl overflow-visible px-1 sm:px-4">
+        <ul className="scrollbar-hide flex items-stretch gap-0 overflow-x-auto overflow-y-visible md:flex-wrap md:overflow-visible">
           {homeCategoryMenu.map((item) => {
             const hasChildren = item.children && item.children.length > 0;
             const isOpen = openLabel === item.label;
@@ -111,7 +131,7 @@ export function HomeCategoryBar() {
                 <li key={item.label} className="shrink-0">
                   <Link
                     href={item.href}
-                    className="block px-3 py-3 text-sm font-semibold text-water-400 transition-colors hover:text-accent-500 sm:px-4"
+                    className="block whitespace-nowrap px-3 py-3 text-sm font-semibold text-water-400 transition-colors hover:text-accent-500 active:text-accent-500 sm:px-4"
                   >
                     {item.label}
                   </Link>
@@ -123,19 +143,29 @@ export function HomeCategoryBar() {
               <li
                 key={item.label}
                 className="relative shrink-0"
-                onMouseEnter={() => setOpenLabel(item.label)}
-                onMouseLeave={() => setOpenLabel(null)}
+                onMouseEnter={() => {
+                  if (window.matchMedia("(hover: hover)").matches) {
+                    setOpenLabel(item.label);
+                  }
+                }}
+                onMouseLeave={() => {
+                  if (window.matchMedia("(hover: hover)").matches) {
+                    setOpenLabel(null);
+                  }
+                }}
               >
-                <span
-                  className={`flex cursor-default select-none items-center gap-1 px-3 py-3 text-sm font-semibold transition-colors sm:px-4 ${
+                <button
+                  type="button"
+                  onClick={() => toggle(item.label)}
+                  className={`flex w-full items-center gap-1 whitespace-nowrap px-3 py-3 text-sm font-semibold transition-colors sm:px-4 ${
                     isOpen ? "text-accent-500" : "text-water-400"
                   }`}
                   aria-haspopup="true"
                   aria-expanded={isOpen}
                 >
                   {item.label}
-                  <ChevronDown />
-                </span>
+                  <ChevronDown open={isOpen} />
+                </button>
 
                 {isOpen && (
                   <CategoryDropdownPanel
@@ -147,6 +177,7 @@ export function HomeCategoryBar() {
                     }
                     twoColumns={item.href === "/kategorie"}
                     items={item.children!}
+                    onNavigate={close}
                   />
                 )}
               </li>

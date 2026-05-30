@@ -24,7 +24,7 @@ export function CatalogPaginationClient({
   if (totalPages <= 1) return null;
 
   const btnClass = (active: boolean, disabled: boolean) =>
-    `rounded-md border px-3 py-1.5 text-sm transition ${
+    `rounded-md border px-2.5 py-1.5 text-xs transition sm:px-3 sm:text-sm ${
       disabled
         ? "pointer-events-none border-water-700 text-water-500 opacity-50"
         : active
@@ -34,7 +34,7 @@ export function CatalogPaginationClient({
 
   return (
     <nav
-      className={`flex flex-wrap items-center justify-end gap-2 ${className}`}
+        className={`flex flex-wrap items-center justify-center gap-1.5 sm:justify-end sm:gap-2 ${className}`}
       aria-label={ariaLabel}
     >
       <button

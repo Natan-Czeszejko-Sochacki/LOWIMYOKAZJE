@@ -28,25 +28,25 @@ export function ProductCard({ product, variant = "default" }: Props) {
         </div>
       )}
 
-      <Link href={`/produkt/${product.slug}`} className="flex flex-1 flex-col p-4">
-        <div className="relative mb-3 h-36 w-full rounded-lg bg-water-900">
+      <Link href={`/produkt/${product.slug}`} className="flex flex-1 flex-col p-3 sm:p-4">
+        <div className="relative mb-2 h-28 w-full rounded-lg bg-water-900 sm:mb-3 sm:h-36">
           <ProductImage
             src={product.image}
             alt={product.name}
-            className="h-36 w-full rounded-lg"
+            className="h-28 w-full rounded-lg sm:h-36"
           />
         </div>
 
-        <p className="text-xs font-medium uppercase tracking-wide text-accent-500">
+        <p className="text-[10px] font-medium uppercase tracking-wide text-accent-500 sm:text-xs">
           {manufacturer}
         </p>
-        <h3 className="mt-1 line-clamp-2 text-sm font-semibold text-foreground group-hover:text-accent-500">
+        <h3 className="mt-1 line-clamp-2 text-xs font-semibold text-foreground group-hover:text-accent-500 sm:text-sm">
           {product.name}
         </h3>
 
         {best ? (
           <div className="mt-auto pt-4">
-            <p className="text-2xl font-bold text-foreground">{formatPrice(best.price)}</p>
+            <p className="text-xl font-bold text-foreground sm:text-2xl">{formatPrice(best.price)}</p>
             {best.originalPrice && best.originalPrice > best.price && (
               <p className="text-sm text-water-500 line-through">
                 {formatPrice(best.originalPrice)}

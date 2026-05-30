@@ -20,7 +20,8 @@ type Props = {
 
 function getVisibleCount(width: number) {
   if (width >= 1024) return 4;
-  return 2;
+  if (width >= 480) return 2;
+  return 1;
 }
 
 function useVisibleCount() {
@@ -232,7 +233,7 @@ export function HotDealsCarousel({
         <SlideDots count={dotCount} index={safeIndex} onSelect={handleDotSelect} />
       </div>
 
-      <div className="relative min-h-0 flex-1 px-10 sm:px-12">
+      <div className="relative min-h-0 flex-1 px-8 sm:px-12">
         <CarouselArrow
           direction="prev"
           disabled={!canNavigate}

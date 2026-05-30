@@ -16,7 +16,7 @@ export function Footer() {
               i kierujemy Cię do sprawdzonych sprzedawców, u których finalizujesz zakup.
             </p>
           </div>
-          <div className="text-right">
+          <div className="sm:text-right">
             <p className="font-semibold text-water-300">Nawigacja</p>
             <ul className="mt-3 space-y-2 text-sm text-water-400">
               <li>

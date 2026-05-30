@@ -12,7 +12,7 @@ import {
 } from "@/lib/cart";
 import { formatPrice } from "@/lib/price-engine";
 
-export function CartButton() {
+export function CartButton({ compact = false }: { compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<ReturnType<typeof readCart>>([]);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -40,17 +40,31 @@ export function CartButton() {
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="rounded-lg border border-water-700 px-3 py-2 text-sm font-medium text-water-400 hover:bg-water-900 hover:text-accent-500"
+        aria-label={`Koszyk${totals.quantity > 0 ? `, ${totals.quantity} produktów` : ""}`}
       >
-        🛒 Koszyk
-        {totals.quantity > 0 && (
-          <span className="ml-2 rounded-full bg-accent-500 px-2 py-0.5 text-xs font-semibold text-white">
-            {totals.quantity}
-          </span>
+        {compact ? (
+          <>
+            <span aria-hidden>🛒</span>
+            {totals.quantity > 0 && (
+              <span className="ml-1 rounded-full bg-accent-500 px-1.5 py-0.5 text-xs font-semibold text-white">
+                {totals.quantity}
+              </span>
+            )}
+          </>
+        ) : (
+          <>
+            🛒 Koszyk
+            {totals.quantity > 0 && (
+              <span className="ml-2 rounded-full bg-accent-500 px-2 py-0.5 text-xs font-semibold text-white">
+                {totals.quantity}
+              </span>
+            )}
+          </>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 z-[110] mt-2 w-80 rounded-xl border border-water-700 bg-white p-4 shadow-xl">
+        <div className="absolute right-0 z-[110] mt-2 w-[min(20rem,calc(100vw-1.5rem))] rounded-xl border border-water-700 bg-white p-4 shadow-xl">
           <h3 className="text-sm font-semibold text-foreground">Podsumowanie koszyka</h3>
           <div className="mt-3 max-h-64 space-y-2 overflow-auto">
             {items.length === 0 ? (

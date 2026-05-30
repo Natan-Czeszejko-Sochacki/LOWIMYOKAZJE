@@ -128,8 +128,8 @@ export default function CartPage() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
-      <h1 className="text-3xl font-bold text-foreground">Koszyk</h1>
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
+      <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Koszyk</h1>
       {items.length === 0 ? (
         <p className="mt-4 text-water-500">
           Koszyk jest pusty. <Link href="/" className="text-accent-500 hover:underline">Wróć do ofert</Link>.
@@ -154,7 +154,7 @@ export default function CartPage() {
                     {storeItems.map((item) => (
                       <div
                         key={getCartItemKey(item)}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-water-700 p-3"
+                        className="flex flex-col gap-3 rounded-xl border border-water-700 p-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
                       >
                         <div className="flex min-w-0 items-center gap-3">
                           <img
@@ -205,12 +205,12 @@ export default function CartPage() {
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex w-full items-center gap-2 sm:w-auto">
                           <a
                             href={item.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="rounded-lg bg-accent-500 px-3 py-2 text-sm font-semibold text-white hover:bg-accent-400"
+                            className="flex-1 rounded-lg bg-accent-500 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-accent-400 sm:flex-none"
                           >
                             Kup teraz
                           </a>

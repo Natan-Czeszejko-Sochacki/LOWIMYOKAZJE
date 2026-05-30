@@ -51,8 +51,8 @@ export default async function ProductPage({ params }: Props) {
   );
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
-      <nav className="mb-6 text-sm text-water-500">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10">
+      <nav className="mb-4 text-sm text-water-500 sm:mb-6">
         <Link href="/" className="hover:text-accent-500">
           Strona główna
         </Link>
@@ -70,12 +70,12 @@ export default async function ProductPage({ params }: Props) {
         )}
       </nav>
 
-      <div className="grid gap-10 lg:grid-cols-[1fr_1.2fr]">
-        <div className="relative aspect-square max-h-[420px] w-full rounded-xl border border-water-700 bg-water-900">
+      <div className="grid gap-8 lg:grid-cols-[1fr_1.2fr] lg:gap-10">
+        <div className="relative mx-auto aspect-square w-full max-w-md rounded-xl border border-water-700 bg-water-900 lg:max-h-[420px] lg:max-w-none">
           <ProductImage
             src={product.image}
             alt={product.name}
-            className="aspect-square max-h-[420px] w-full rounded-xl"
+            className="aspect-square h-full w-full rounded-xl object-contain lg:max-h-[420px]"
             priority
           />
           {product.discountPercent >= 20 && (
@@ -86,10 +86,12 @@ export default async function ProductPage({ params }: Props) {
         </div>
 
         <div>
-          <h1 className="text-3xl font-bold text-foreground">{product.name}</h1>
+          <h1 className="text-2xl font-bold leading-snug text-foreground sm:text-3xl">
+            {product.name}
+          </h1>
 
-          <dl className="mt-5 grid gap-2.5 border-y border-water-700 py-5 text-sm">
-            <div className="grid grid-cols-[8.5rem_1fr] items-baseline gap-x-4">
+          <dl className="mt-4 grid gap-2.5 border-y border-water-700 py-4 text-sm sm:mt-5 sm:py-5">
+            <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-[8.5rem_1fr] sm:items-baseline sm:gap-x-4">
               <dt className="text-water-500">Kategoria sprzętu</dt>
               <dd>
                 {category ? (
@@ -104,11 +106,11 @@ export default async function ProductPage({ params }: Props) {
                 )}
               </dd>
             </div>
-            <div className="grid grid-cols-[8.5rem_1fr] items-baseline gap-x-4">
+            <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-[8.5rem_1fr] sm:items-baseline sm:gap-x-4">
               <dt className="text-water-500">EAN</dt>
               <dd className="font-mono text-foreground">{product.ean ?? "—"}</dd>
             </div>
-            <div className="grid grid-cols-[8.5rem_1fr] items-baseline gap-x-4">
+            <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-[8.5rem_1fr] sm:items-baseline sm:gap-x-4">
               <dt className="text-water-500">Producent</dt>
               <dd className="font-medium text-foreground">{manufacturer ?? "—"}</dd>
             </div>
@@ -129,7 +131,7 @@ export default async function ProductPage({ params }: Props) {
           )}
 
           {best && (
-            <div className="mt-8 rounded-xl border border-accent-500/30 bg-accent-950 p-6">
+            <div className="mt-6 rounded-xl border border-accent-500/30 bg-accent-950 p-4 sm:mt-8 sm:p-6">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <p className="text-sm text-water-400">Najlepsza cena</p>
                 {isPriceDrop && (
@@ -143,7 +145,7 @@ export default async function ProductPage({ params }: Props) {
                   </span>
                 )}
               </div>
-              <p className="text-4xl font-bold text-foreground">
+              <p className="text-3xl font-bold text-foreground sm:text-4xl">
                 {formatPrice(best.price)}
               </p>
               {bestEffectiveOriginal && (
@@ -171,12 +173,12 @@ export default async function ProductPage({ params }: Props) {
                   Oszczędzasz do {formatPrice(savings)} vs najdroższy sklep
                 </p>
               )}
-              <div className="mt-4 flex flex-wrap items-center gap-3">
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
                 <a
                   href={best.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex rounded-xl bg-accent-500 px-6 py-3 font-semibold text-white hover:bg-accent-400"
+                  className="inline-flex justify-center rounded-xl bg-accent-500 px-5 py-3 text-center font-semibold text-white hover:bg-accent-400 sm:px-6"
                 >
                   Kup teraz w{" "}
                   {getStoreNameForOffer(best)} →
@@ -192,11 +194,11 @@ export default async function ProductPage({ params }: Props) {
                     price: best.price,
                     url: best.url,
                   }}
-                  className="inline-flex rounded-xl border border-accent-500/40 bg-white px-5 py-3 font-semibold text-accent-500 hover:bg-accent-50"
+                  className="inline-flex justify-center rounded-xl border border-accent-500/40 bg-white px-5 py-3 font-semibold text-accent-500 hover:bg-accent-50"
                 />
                 <button
                   type="button"
-                  className="inline-flex rounded-xl border border-accent-500/40 bg-white px-5 py-3 font-semibold text-accent-500 hover:bg-accent-50"
+                  className="inline-flex justify-center rounded-xl border border-accent-500/40 bg-white px-5 py-3 font-semibold text-accent-500 hover:bg-accent-50"
                 >
                   🔔 Ustaw alert cenowy
                 </button>

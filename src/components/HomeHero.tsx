@@ -38,16 +38,16 @@ export function HomeHero() {
     >
       <div className="bg-gradient-to-b from-white/75 via-white/60 to-white/50">
         <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:py-20">
-          <div className="mx-auto max-w-4xl space-y-6 lg:space-y-8">
-            <div className="space-y-5 sm:space-y-6">
-              <h1 className="text-3xl font-bold leading-tight tracking-tight text-foreground sm:text-4xl lg:text-5xl xl:text-[3.25rem]">
+          <div className="mx-auto max-w-4xl space-y-5 sm:space-y-6 lg:space-y-8">
+            <div className="space-y-4 sm:space-y-5 lg:space-y-6">
+              <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground sm:text-4xl lg:text-5xl xl:text-[3.25rem]">
                 Sprzęt wędkarski nawet{" "}
                 <span className="box-decoration-clone rounded-md bg-emerald-800 px-2 py-0.5 text-white shadow-[0_2px_10px_rgba(0,0,0,0.35)] ring-1 ring-white/50">
                   70% taniej
                 </span>
                 ? Łowimy Okazje!
               </h1>
-              <p className="max-w-3xl text-lg font-medium leading-relaxed text-foreground drop-shadow-[0_1px_12px_rgba(255,255,255,0.85)] sm:text-xl lg:text-2xl">
+              <p className="max-w-3xl text-base font-medium leading-relaxed text-foreground drop-shadow-[0_1px_12px_rgba(255,255,255,0.85)] sm:text-xl lg:text-2xl">
                 Nie przepłacaj w pojedynczych sklepach. Wpisz nazwę produktu i zobacz, gdzie kupisz go
                 najtaniej.
               </p>
@@ -65,9 +65,9 @@ export function HomeHero() {
 
             <GlobalSearchForm
               showIcon
-              inputClassName="w-full rounded-2xl border border-water-700 bg-white py-5 pl-14 pr-28 text-lg text-foreground shadow-md placeholder:text-water-500 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 sm:py-6 sm:pl-16 sm:pr-32 sm:text-xl"
-              buttonClassName="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-accent-500 px-5 py-2.5 text-base font-semibold text-white hover:bg-accent-400 sm:right-3 sm:px-6 sm:py-3 sm:text-lg"
-              placeholder="np. Shimano, kołowrotek, wobbler, wędka karpiowa…"
+              inputClassName="w-full rounded-2xl border border-water-700 bg-white py-4 pl-12 pr-[5.5rem] text-base text-foreground shadow-md placeholder:text-water-500 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 sm:py-6 sm:pl-16 sm:pr-32 sm:text-xl"
+              buttonClassName="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-xl bg-accent-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-400 sm:right-3 sm:px-6 sm:py-3 sm:text-lg"
+              placeholder="np. Shimano, kołowrotek, wobbler…"
             />
 
             <ScrollToHotDealsCTA />

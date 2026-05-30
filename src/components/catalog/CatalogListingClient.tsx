@@ -55,6 +55,7 @@ export function CatalogListingClient({
   const [facetsLoading, setFacetsLoading] = useState(
     initialView.storeOptions.length === 0 && initialView.brandOptions.length === 0
   );
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     setView(initialView);
@@ -172,6 +173,9 @@ export function CatalogListingClient({
     const maxPrice = String(fd.get("maxPrice") ?? "").trim();
     if (maxPrice) next.set("maxPrice", maxPrice);
     loadListing(next);
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      setFiltersOpen(false);
+    }
   };
 
   const selectedStore = params.get("store") ?? "";
@@ -303,8 +307,24 @@ export function CatalogListingClient({
         }
         sidebar={
           !view.tooShort ? (
-            <aside className="h-fit rounded-xl border border-water-700 bg-white p-4 shadow-sm lg:sticky lg:top-24">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">
+            <>
+              <button
+                type="button"
+                onClick={() => setFiltersOpen((v) => !v)}
+                className="flex w-full items-center justify-between rounded-xl border border-water-700 bg-white px-4 py-3 text-sm font-semibold text-foreground shadow-sm lg:hidden"
+                aria-expanded={filtersOpen}
+              >
+                Sortowanie i filtry
+                <span aria-hidden className="text-water-500">
+                  {filtersOpen ? "▲" : "▼"}
+                </span>
+              </button>
+              <aside
+                className={`h-fit rounded-xl border border-water-700 bg-white p-4 shadow-sm lg:sticky lg:top-24 ${
+                  filtersOpen ? "block" : "hidden lg:block"
+                }`}
+              >
+              <h2 className="hidden text-sm font-semibold uppercase tracking-wide text-foreground lg:block">
                 Sortowanie i filtry
                 {facetsLoading ? (
                   <span className="ml-2 text-xs font-normal normal-case text-water-500">
@@ -441,6 +461,7 @@ export function CatalogListingClient({
                 </div>
               </form>
             </aside>
+            </>
           ) : undefined
         }
       >
