@@ -14,9 +14,9 @@ import {
   cleanWidgetPrices,
   purgeEmptyListings,
   getSyncStats,
-  getDb,
   getRecentlyUpdatedUrls,
 } from "./db";
+import { queryRows } from "./sql";
 import { inferCategorySlug } from "./categories";
 import { shouldAbortSync } from "./sync-control-node";
 
@@ -62,9 +62,14 @@ export async function runCatalogSync(options?: {
         let items: { url: string; name?: string; imageUrl?: string }[] = [];
 
         if (options?.priceOnly) {
-          const rows = getDb()
-            .prepare("SELECT url, name, image_url FROM listings WHERE store_id = ?")
-            .all(config.id) as { url: string; name: string; image_url: string | null }[];
+          const rows = await queryRows<{
+            url: string;
+            name: string;
+            image_url: string | null;
+          }>(
+            "SELECT url, name, image_url FROM listings WHERE store_id = ?",
+            [config.id]
+          );
           items = rows.map((r) => ({
             url: r.url,
             name: r.name,
@@ -89,7 +94,7 @@ export async function runCatalogSync(options?: {
   }
 
   try {
-    const purged = purgeEmptyListings();
+    const purged = await purgeEmptyListings();
     if (purged.listingsRemoved > 0 || purged.groupsRemoved > 0) {
       console.info(
         `[sync] Usunięto puste rekordy: ${purged.listingsRemoved} ofert, ${purged.groupsRemoved} grup`
@@ -101,7 +106,7 @@ export async function runCatalogSync(options?: {
 
   // Automatyczne czyszczenie błędnych "cen przed promocją" (widgety sklepów)
   try {
-    const cleaned = cleanWidgetPrices();
+    const cleaned = await cleanWidgetPrices();
     if (cleaned > 0) {
       console.info(`[sync] Wyczyszczono ${cleaned} błędnych original_price (widgety)`);
     }
@@ -111,14 +116,14 @@ export async function runCatalogSync(options?: {
 
   if (!options?.priceOnly) {
     try {
-      rebuildFts();
+      await rebuildFts();
     } catch {
       /* fts optional */
     }
   }
 
   try {
-    const merged = mergeDuplicateProductGroups();
+    const merged = await mergeDuplicateProductGroups();
     if (merged.listingsUpdated > 0 || merged.groupsRemoved > 0) {
       console.info(
         `[sync] Scalono duplikaty: ${merged.listingsUpdated} ofert, usunięto ${merged.groupsRemoved} pustych grup`
@@ -128,7 +133,7 @@ export async function runCatalogSync(options?: {
     console.error("[sync] Błąd scalania duplikatów:", err);
   }
 
-  const stats = getSyncStats();
+  const stats = await getSyncStats();
   return {
     syncedAt: new Date().toISOString(),
     stores: configs.length,
@@ -152,8 +157,8 @@ async function processItemsBatch(
 
   // Zbuduj cache świeżo zaktualizowanych URL-i — pomijamy refetch jeśli < 6h
   const freshUrls = priceOnly
-    ? new Set<string>()   // w trybie price-only zawsze odświeżamy
-    : getRecentlyUpdatedUrls(storeId, SKIP_IF_FRESHER_THAN_HOURS);
+    ? new Set<string>()
+    : await getRecentlyUpdatedUrls(storeId, SKIP_IF_FRESHER_THAN_HOURS);
 
   const skipped = items.filter((it) => freshUrls.has(it.url.split("?")[0])).length;
   const toFetch = items.filter((it) => !freshUrls.has(it.url.split("?")[0]));
@@ -168,20 +173,19 @@ async function processItemsBatch(
   const writeBuf: Parameters<typeof batchUpsertListings>[0] = [];
   const deleteIds: string[] = [];
   const identityIndex = ProductIdentityIndex.fromListings(
-    getDb()
-      .prepare("SELECT group_id, name, brand, ean, producer_code FROM listings")
-      .all() as {
+    await queryRows<{
       group_id: string;
       name: string;
       brand: string | null;
       ean: string | null;
       producer_code: string | null;
-    }[]
+    }>("SELECT group_id, name, brand, ean, producer_code FROM listings")
   );
 
-  function flushBuf() {
+  async function flushBuf() {
     if (writeBuf.length === 0) return;
-    batchUpsertListings(writeBuf.splice(0));
+    const batch = writeBuf.splice(0);
+    await batchUpsertListings(batch);
   }
 
   async function worker() {
@@ -234,7 +238,7 @@ async function processItemsBatch(
       processed++;
 
       // Zapis do DB w partiach
-      if (writeBuf.length >= WRITE_BATCH_SIZE) flushBuf();
+      if (writeBuf.length >= WRITE_BATCH_SIZE) await flushBuf();
 
       if ((i + 1) % 100 === 0) {
         console.info(`[sync] ${storeId}: ${i + 1}/${toFetch.length}`);
@@ -249,10 +253,10 @@ async function processItemsBatch(
   await Promise.all(workers);
 
   // Zapis pozostałych
-  flushBuf();
+  await flushBuf();
 
   if (deleteIds.length > 0) {
-    deleteListings(deleteIds);
+    await deleteListings(deleteIds);
   }
   if (rejected > 0) {
     console.info(`[sync] ${storeId}: pominięto ${rejected} ofert bez ceny / błędnego fetcha`);

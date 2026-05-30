@@ -10,7 +10,7 @@ import { getCatalogProducts } from "@/lib/catalog";
 import { getStoreById } from "@/lib/stores";
 import { formatManufacturerDisplay } from "@/lib/product-matcher";
 
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
 
 const CATEGORY_PRODUCT_LIMIT = 96;
 

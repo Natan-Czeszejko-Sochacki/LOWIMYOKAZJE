@@ -11,7 +11,7 @@ type SyncGlobal = typeof globalThis & {
 
 export async function syncAllStorePrices() {
   if (isSyncPaused() || isSyncAborted()) {
-    const stats = getSyncStats();
+    const stats = await getSyncStats();
     return {
       updated: stats.listings,
       syncedAt: stats.lastSync ?? new Date().toISOString(),
@@ -25,7 +25,7 @@ export async function syncAllStorePrices() {
 
   const syncGlobal = globalThis as SyncGlobal;
   if (syncGlobal[SYNC_LOCK]) {
-    const stats = getSyncStats();
+    const stats = await getSyncStats();
     return {
       updated: stats.listings,
       syncedAt: stats.lastSync ?? new Date().toISOString(),
@@ -40,7 +40,7 @@ export async function syncAllStorePrices() {
   try {
     const result = await runFullSync();
 
-    const after = getSyncStats();
+    const after = await getSyncStats();
     return {
       updated: result.listingsProcessed,
       syncedAt: result.syncedAt,
@@ -57,5 +57,5 @@ export async function syncAllStorePrices() {
 
 export async function getOffers() {
   const { getListingsForCatalog } = await import("../catalog-db");
-  return getListingsForCatalog();
+  return await getListingsForCatalog();
 }

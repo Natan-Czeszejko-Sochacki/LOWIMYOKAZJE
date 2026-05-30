@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    saveContactMessage(payload);
+    await saveContactMessage(payload);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json(

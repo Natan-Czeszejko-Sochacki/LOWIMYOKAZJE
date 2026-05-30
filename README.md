@@ -10,6 +10,7 @@ AngryFish, Big Fish, CarpRide, Centrum Wędkarskie, E-Amur, Ehooks, FatFish, Fee
 
 ```bash
 npm install
+# .env.local: DATABASE_URL z Supabase (Settings → Database → URI)
 npm run dev
 ```
 
@@ -25,7 +26,7 @@ Otwórz http://localhost:3000 i kliknij **„Odśwież ceny”** — pierwsza sy
 
 1. Zbieranie URL-i produktów z sitemapów / kategorii każdego sklepu  
 2. Pobranie strony produktu → **cena, zdjęcie, nazwa, link bezpośredni**  
-3. Zapis w SQLite (`data/catalog.db`)  
+3. Zapis w Supabase (Postgres) — lokalny import z `data/catalog.db` przez `npm run db:migrate`  
 4. Grupowanie podobnych produktów (EAN lub znormalizowana nazwa) do porównania cen  
 
 ## Skrypty
@@ -48,4 +49,6 @@ npm run build
 npm start
 ```
 
-Ustaw `CRON_SECRET` w `.env` (patrz `.env.example`).
+Ustaw w Vercel: `DATABASE_URL` (pooler, port 6543) oraz opcjonalnie `CRON_SECRET` (patrz `.env.example`).
+
+**Pierwszy import danych:** uruchom schemat `supabase/migrations/001_schema.sql` w Supabase SQL Editor, potem lokalnie `npm run db:migrate` (wymaga `data/catalog.db`).

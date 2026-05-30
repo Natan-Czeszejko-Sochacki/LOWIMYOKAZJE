@@ -1,4 +1,5 @@
-import { getDb, getSyncStats } from "./db";
+import { getSyncStats, type ListingRow } from "./db";
+import { queryOne, queryRows } from "./sql";
 import { enrichProduct, getHotDeals } from "./price-engine";
 import type { ProductWithOffers, StoreOffer, Product } from "./types";
 import { ALLOWED_STORE_IDS } from "./store-configs";
@@ -6,7 +7,6 @@ import { getCategoryDescendantSlugs, resolveProductCategorySlug } from "./catego
 import { normalizeEan } from "./product-matcher";
 
 const ALLOWED_STORE_IDS_LIST = [...ALLOWED_STORE_IDS];
-const ALLOWED_STORE_PLACEHOLDERS = ALLOWED_STORE_IDS_LIST.map(() => "?").join(",");
 
 type GroupRow = {
   id: string;
@@ -15,24 +15,6 @@ type GroupRow = {
   slug: string;
   image_url: string | null;
   category_id: string;
-};
-
-type ListingRow = {
-  id: string;
-  group_id: string;
-  store_id: string;
-  name: string;
-  url: string;
-  price: number | null;
-  original_price: number | null;
-  previous_price: number | null;
-  lowest_price_30d: number | null;
-  image_url: string | null;
-  ean: string | null;
-  producer_code: string | null;
-  brand: string | null;
-  in_stock: number;
-  updated_at: string;
 };
 
 function enrichProductFromListings(
@@ -84,7 +66,7 @@ function listingToOffer(row: ListingRow): StoreOffer {
     previousPrice: row.previous_price ?? undefined,
     currency: "PLN",
     url: row.url,
-    inStock: row.in_stock === 1,
+    inStock: row.in_stock === true || row.in_stock === 1,
     updatedAt: row.updated_at,
   };
 }
@@ -107,29 +89,26 @@ function groupRowsByProduct(rows: ListingRow[]): Map<string, ListingRow[]> {
   return byGroup;
 }
 
-function getListingsForGroups(groupIds: string[]): ListingRow[] {
+async function getListingsForGroups(groupIds: string[]): Promise<ListingRow[]> {
   if (groupIds.length === 0) return [];
 
-  const db = getDb();
   if (groupIds.length > 900) {
-    return db
-      .prepare(
-        `SELECT * FROM listings
-         WHERE store_id IN (${ALLOWED_STORE_PLACEHOLDERS})
-           AND price IS NOT NULL
-           AND price > 0`
-      )
-      .all(...ALLOWED_STORE_IDS_LIST) as ListingRow[];
+    return queryRows<ListingRow>(
+      `SELECT * FROM listings
+       WHERE store_id IN (${ALLOWED_STORE_IDS_LIST.map(() => "?").join(",")})
+         AND price IS NOT NULL
+         AND price > 0`,
+      ALLOWED_STORE_IDS_LIST
+    );
   }
 
   const groupPlaceholders = groupIds.map(() => "?").join(",");
-  return db
-    .prepare(
-      `SELECT * FROM listings
-       WHERE group_id IN (${groupPlaceholders})
-         AND store_id IN (${ALLOWED_STORE_PLACEHOLDERS})`
-    )
-    .all(...groupIds, ...ALLOWED_STORE_IDS_LIST) as ListingRow[];
+  return queryRows<ListingRow>(
+    `SELECT * FROM listings
+     WHERE group_id IN (${groupPlaceholders})
+       AND store_id IN (${ALLOWED_STORE_IDS_LIST.map(() => "?").join(",")})`,
+    [...groupIds, ...ALLOWED_STORE_IDS_LIST]
+  );
 }
 
 function groupsToProducts(
@@ -171,13 +150,11 @@ function groupsToProducts(
   return result;
 }
 
-export function getListingsForCatalog(): StoreOffer[] {
-  const db = getDb();
-  const rows = db
-    .prepare(
-      `SELECT * FROM listings WHERE store_id IN (${ALLOWED_STORE_PLACEHOLDERS}) AND price IS NOT NULL AND price > 0`
-    )
-    .all(...ALLOWED_STORE_IDS_LIST) as ListingRow[];
+export async function getListingsForCatalog(): Promise<StoreOffer[]> {
+  const rows = await queryRows<ListingRow>(
+    `SELECT * FROM listings WHERE store_id IN (${ALLOWED_STORE_IDS_LIST.map(() => "?").join(",")}) AND price IS NOT NULL AND price > 0`,
+    ALLOWED_STORE_IDS_LIST
+  );
   return rows.map(listingToOffer);
 }
 
@@ -185,7 +162,6 @@ export async function getCatalogProducts(
   categorySlug?: string,
   options: CatalogProductOptions = {}
 ): Promise<ProductWithOffers[]> {
-  const db = getDb();
   const categorySlugs = categorySlug
     ? getCategoryDescendantSlugs(categorySlug)
     : null;
@@ -194,24 +170,22 @@ export async function getCatalogProducts(
   const groupLimit = targetCount ? targetCount * 3 : null;
 
   const groups = categorySlugs
-    ? (db
-        .prepare(
-          `SELECT * FROM product_groups
-           WHERE category_id IN (${[...categorySlugs].map(() => "?").join(",")})
-           ORDER BY updated_at DESC
-           ${groupLimit ? "LIMIT ?" : ""}`
-        )
-        .all(...categorySlugs, ...(groupLimit ? [groupLimit] : [])) as GroupRow[])
-    : (db
-        .prepare(
-          `SELECT * FROM product_groups
-           ORDER BY updated_at DESC
-           ${groupLimit ? "LIMIT ?" : ""}`
-        )
-        .all(...(groupLimit ? [groupLimit] : [])) as GroupRow[]);
+    ? await queryRows<GroupRow>(
+        `SELECT * FROM product_groups
+         WHERE category_id IN (${[...categorySlugs].map(() => "?").join(",")})
+         ORDER BY updated_at DESC
+         ${groupLimit ? "LIMIT ?" : ""}`,
+        [...categorySlugs, ...(groupLimit ? [groupLimit] : [])]
+      )
+    : await queryRows<GroupRow>(
+        `SELECT * FROM product_groups
+         ORDER BY updated_at DESC
+         ${groupLimit ? "LIMIT ?" : ""}`,
+        groupLimit ? [groupLimit] : []
+      );
 
   const listingsByGroup = groupRowsByProduct(
-    getListingsForGroups(groups.map((g) => g.id))
+    await getListingsForGroups(groups.map((g) => g.id))
   );
   const products = groupsToProducts(groups, listingsByGroup, categorySlugs);
   const offset = Math.max(0, options.offset ?? 0);
@@ -224,60 +198,56 @@ export async function getFeaturedProducts(limit = 6): Promise<ProductWithOffers[
 }
 
 export async function getCatalogProductCount(categorySlug?: string): Promise<number> {
-  const db = getDb();
   const categorySlugs = categorySlug
     ? getCategoryDescendantSlugs(categorySlug)
     : null;
 
   if (!categorySlugs) {
-    const row = db
-      .prepare(
-        `SELECT COUNT(DISTINCT g.id) AS c
-         FROM product_groups g
-         INNER JOIN listings l ON l.group_id = g.id
-         WHERE l.store_id IN (${ALLOWED_STORE_PLACEHOLDERS})
-           AND l.price IS NOT NULL
-           AND l.price > 0`
-      )
-      .get(...ALLOWED_STORE_IDS_LIST) as { c: number };
-    return row.c;
-  }
-
-  const row = db
-    .prepare(
-      `SELECT COUNT(DISTINCT g.id) AS c
+    const row = await queryOne<{ c: number }>(
+      `SELECT COUNT(DISTINCT g.id)::int AS c
        FROM product_groups g
        INNER JOIN listings l ON l.group_id = g.id
-       WHERE g.category_id IN (${[...categorySlugs].map(() => "?").join(",")})
-         AND l.store_id IN (${ALLOWED_STORE_PLACEHOLDERS})
+       WHERE l.store_id IN (${ALLOWED_STORE_IDS_LIST.map(() => "?").join(",")})
          AND l.price IS NOT NULL
-         AND l.price > 0`
-    )
-    .get(...categorySlugs, ...ALLOWED_STORE_IDS_LIST) as { c: number };
-  return row.c;
+         AND l.price > 0`,
+      ALLOWED_STORE_IDS_LIST
+    );
+    return row?.c ?? 0;
+  }
+
+  const row = await queryOne<{ c: number }>(
+    `SELECT COUNT(DISTINCT g.id)::int AS c
+     FROM product_groups g
+     INNER JOIN listings l ON l.group_id = g.id
+     WHERE g.category_id IN (${[...categorySlugs].map(() => "?").join(",")})
+       AND l.store_id IN (${ALLOWED_STORE_IDS_LIST.map(() => "?").join(",")})
+       AND l.price IS NOT NULL
+       AND l.price > 0`,
+    [...categorySlugs, ...ALLOWED_STORE_IDS_LIST]
+  );
+  return row?.c ?? 0;
 }
 
 export async function getProductWithOffers(
   slugOrId: string
 ): Promise<ProductWithOffers | null> {
-  const db = getDb();
-
-  const alias = db
-    .prepare("SELECT canonical_slug FROM slug_aliases WHERE alias = ?")
-    .get(slugOrId) as { canonical_slug: string } | undefined;
+  const alias = await queryOne<{ canonical_slug: string }>(
+    "SELECT canonical_slug FROM slug_aliases WHERE alias = ?",
+    [slugOrId]
+  );
   const lookupSlug = alias?.canonical_slug ?? slugOrId;
 
-  const group = db
-    .prepare("SELECT * FROM product_groups WHERE slug = ? OR id = ?")
-    .get(lookupSlug, slugOrId) as GroupRow | undefined;
+  const group = await queryOne<GroupRow>(
+    "SELECT * FROM product_groups WHERE slug = ? OR id = ?",
+    [lookupSlug, slugOrId]
+  );
 
   if (!group) return null;
 
-  const rows = db
-    .prepare(
-      `SELECT * FROM listings WHERE group_id = ? AND store_id IN (${ALLOWED_STORE_PLACEHOLDERS}) ORDER BY price ASC`
-    )
-    .all(group.id, ...ALLOWED_STORE_IDS_LIST) as ListingRow[];
+  const rows = await queryRows<ListingRow>(
+    `SELECT * FROM listings WHERE group_id = ? AND store_id IN (${ALLOWED_STORE_IDS_LIST.map(() => "?").join(",")}) ORDER BY price ASC`,
+    [group.id, ...ALLOWED_STORE_IDS_LIST]
+  );
 
   const offers = rows
     .filter((r) => r.price !== null && r.price > 0)
@@ -293,25 +263,23 @@ export async function getProductWithOffers(
 }
 
 export async function getHomepageDeals(): Promise<ProductWithOffers[]> {
-  const db = getDb();
-  const groups = db
-    .prepare(
-      `SELECT g.*,
-              (MAX(COALESCE(NULLIF(l.original_price, 0), l.price)) / MIN(l.price)) AS deal_score
-       FROM product_groups g
-       INNER JOIN listings l ON l.group_id = g.id
-       WHERE l.store_id IN (${ALLOWED_STORE_PLACEHOLDERS})
-         AND l.price IS NOT NULL
-         AND l.price > 0
-       GROUP BY g.id
-       HAVING deal_score > 1
-       ORDER BY deal_score DESC, g.updated_at DESC
-       LIMIT 200`
-    )
-    .all(...ALLOWED_STORE_IDS_LIST) as GroupRow[];
+  const groups = await queryRows<GroupRow>(
+    `SELECT g.*,
+            (MAX(COALESCE(NULLIF(l.original_price, 0), l.price)) / MIN(l.price)) AS deal_score
+     FROM product_groups g
+     INNER JOIN listings l ON l.group_id = g.id
+     WHERE l.store_id IN (${ALLOWED_STORE_IDS_LIST.map(() => "?").join(",")})
+       AND l.price IS NOT NULL
+       AND l.price > 0
+     GROUP BY g.id, g.name, g.brand, g.slug, g.image_url, g.category_id, g.updated_at
+     HAVING (MAX(COALESCE(NULLIF(l.original_price, 0), l.price)) / MIN(l.price)) > 1
+     ORDER BY deal_score DESC, g.updated_at DESC
+     LIMIT 200`,
+    ALLOWED_STORE_IDS_LIST
+  );
 
   const listingsByGroup = groupRowsByProduct(
-    getListingsForGroups(groups.map((g) => g.id))
+    await getListingsForGroups(groups.map((g) => g.id))
   );
   return getHotDeals(groupsToProducts(groups, listingsByGroup, null), 15).slice(0, 12);
 }
@@ -320,36 +288,34 @@ export async function searchProducts(query: string): Promise<ProductWithOffers[]
   const q = query.trim();
   if (!q) return [];
 
-  const db = getDb();
   const pattern = `%${q}%`;
 
-  const groups = db
-    .prepare(
-      `SELECT DISTINCT g.* FROM product_groups g
-       INNER JOIN listings l ON l.group_id = g.id
-       WHERE (l.name LIKE ? OR l.brand LIKE ? OR g.name LIKE ? OR g.brand LIKE ? OR l.ean LIKE ? OR l.producer_code LIKE ?)
-       AND l.price IS NOT NULL AND l.price > 0
-       AND l.store_id IN (${ALLOWED_STORE_PLACEHOLDERS})
-       ORDER BY g.updated_at DESC
-       LIMIT 5000`
-    )
-    .all(
+  const groups = await queryRows<GroupRow>(
+    `SELECT DISTINCT g.* FROM product_groups g
+     INNER JOIN listings l ON l.group_id = g.id
+     WHERE (l.name ILIKE ? OR l.brand ILIKE ? OR g.name ILIKE ? OR g.brand ILIKE ? OR l.ean ILIKE ? OR l.producer_code ILIKE ?)
+     AND l.price IS NOT NULL AND l.price > 0
+     AND l.store_id IN (${ALLOWED_STORE_IDS_LIST.map(() => "?").join(",")})
+     ORDER BY g.updated_at DESC
+     LIMIT 5000`,
+    [
       pattern,
       pattern,
       pattern,
       pattern,
       pattern,
       pattern,
-      ...ALLOWED_STORE_IDS_LIST
-    ) as GroupRow[];
-
-  const result: ProductWithOffers[] = [];
-  const listingStmt = db.prepare(
-    `SELECT * FROM listings WHERE group_id = ? AND store_id IN (${ALLOWED_STORE_PLACEHOLDERS})`
+      ...ALLOWED_STORE_IDS_LIST,
+    ]
   );
 
+  const result: ProductWithOffers[] = [];
+
   for (const g of groups) {
-    const rows = listingStmt.all(g.id, ...ALLOWED_STORE_IDS_LIST) as ListingRow[];
+    const rows = await queryRows<ListingRow>(
+      `SELECT * FROM listings WHERE group_id = ? AND store_id IN (${ALLOWED_STORE_IDS_LIST.map(() => "?").join(",")})`,
+      [g.id, ...ALLOWED_STORE_IDS_LIST]
+    );
     const offers = rows.filter((r) => r.price != null && r.price > 0).map(listingToOffer);
     if (offers.length === 0) continue;
     const image = rows.find((r) => r.image_url)?.image_url ?? "";
@@ -364,6 +330,7 @@ export async function searchProducts(query: string): Promise<ProductWithOffers[]
   return result;
 }
 
-export function getLastSyncTime(): string | null {
-  return getSyncStats().lastSync;
+export async function getLastSyncTime(): Promise<string | null> {
+  const stats = await getSyncStats();
+  return stats.lastSync;
 }

@@ -6,13 +6,17 @@ import { stores } from "@/lib/stores";
 import { getHomepageDeals } from "@/lib/catalog";
 import { getSyncStats } from "@/lib/db";
 
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [deals, stats] = await Promise.all([
-    getHomepageDeals(),
-    Promise.resolve(getSyncStats()),
-  ]);
+  let deals: Awaited<ReturnType<typeof getHomepageDeals>> = [];
+  let stats = { listings: 0, groups: 0, lastSync: null as string | null };
+
+  try {
+    [deals, stats] = await Promise.all([getHomepageDeals(), getSyncStats()]);
+  } catch (err) {
+    console.error("[home] Błąd odczytu bazy:", err);
+  }
 
   return (
     <div>

@@ -1,4 +1,5 @@
-import { getDb, getSyncStats } from "./db";
+import { getSyncStats } from "./db";
+import { queryOne, queryRows } from "./sql";
 import { getStoreById } from "./stores";
 
 export type StoreListingCount = {
@@ -36,46 +37,42 @@ export type AdminOverview = {
   multiStoreProducts: number;
 };
 
-const ACTIVE_LISTING = `l.price IS NOT NULL AND l.price > 0 AND l.in_stock = 1`;
+const ACTIVE_LISTING = `l.price IS NOT NULL AND l.price > 0 AND l.in_stock = true`;
 
-export function getAdminOverview(): AdminOverview {
-  const db = getDb();
-  const sync = getSyncStats();
+export async function getAdminOverview(): Promise<AdminOverview> {
+  const sync = await getSyncStats();
 
-  const activePriced = db
-    .prepare(`SELECT COUNT(*) AS c FROM listings WHERE price IS NOT NULL AND price > 0`)
-    .get() as { c: number };
+  const activePriced = await queryOne<{ c: number }>(
+    `SELECT COUNT(*)::int AS c FROM listings WHERE price IS NOT NULL AND price > 0`
+  );
 
-  const inStock = db
-    .prepare(
-      `SELECT COUNT(*) AS c FROM listings WHERE price IS NOT NULL AND price > 0 AND in_stock = 1`
-    )
-    .get() as { c: number };
+  const inStock = await queryOne<{ c: number }>(
+    `SELECT COUNT(*)::int AS c FROM listings WHERE price IS NOT NULL AND price > 0 AND in_stock = true`
+  );
 
-  const storeRows = db
-    .prepare(
-      `SELECT store_id, COUNT(*) AS c
-       FROM listings
-       WHERE price IS NOT NULL AND price > 0
-       GROUP BY store_id
-       ORDER BY c DESC`
-    )
-    .all() as { store_id: string; c: number }[];
+  const storeRows = await queryRows<{ store_id: string; c: number }>(
+    `SELECT store_id, COUNT(*)::int AS c
+     FROM listings
+     WHERE price IS NOT NULL AND price > 0
+     GROUP BY store_id
+     ORDER BY c DESC`
+  );
 
-  const distributionRows = db
-    .prepare(
-      `SELECT store_count, COUNT(*) AS product_count
-       FROM (
-         SELECT g.id, COUNT(DISTINCT l.store_id) AS store_count
-         FROM product_groups g
-         INNER JOIN listings l ON l.group_id = g.id
-         WHERE ${ACTIVE_LISTING}
-         GROUP BY g.id
-       )
-       GROUP BY store_count
-       ORDER BY store_count ASC`
-    )
-    .all() as { store_count: number; product_count: number }[];
+  const distributionRows = await queryRows<{
+    store_count: number;
+    product_count: number;
+  }>(
+    `SELECT store_count, COUNT(*)::int AS product_count
+     FROM (
+       SELECT g.id, COUNT(DISTINCT l.store_id)::int AS store_count
+       FROM product_groups g
+       INNER JOIN listings l ON l.group_id = g.id
+       WHERE ${ACTIVE_LISTING}
+       GROUP BY g.id
+     ) sub
+     GROUP BY store_count
+     ORDER BY store_count ASC`
+  );
 
   const multiStore = distributionRows
     .filter((r) => r.store_count > 1)
@@ -84,8 +81,8 @@ export function getAdminOverview(): AdminOverview {
   return {
     totalGroups: sync.groups,
     totalListings: sync.listings,
-    activePricedListings: activePriced.c,
-    inStockListings: inStock.c,
+    activePricedListings: activePriced?.c ?? 0,
+    inStockListings: inStock?.c ?? 0,
     lastSync: sync.lastSync,
     storeBreakdown: storeRows.map((r) => ({
       storeId: r.store_id,
@@ -100,54 +97,31 @@ export function getAdminOverview(): AdminOverview {
   };
 }
 
-export function countMultiStoreProducts(
+export async function countMultiStoreProducts(
   minStores: number,
   maxStores: number
-): number {
-  const db = getDb();
-  const row = db
-    .prepare(
-      `SELECT COUNT(*) AS c FROM (
-         SELECT g.id
-         FROM product_groups g
-         INNER JOIN listings l ON l.group_id = g.id
-         WHERE ${ACTIVE_LISTING}
-         GROUP BY g.id
-         HAVING COUNT(DISTINCT l.store_id) >= ? AND COUNT(DISTINCT l.store_id) <= ?
-       )`
-    )
-    .get(minStores, maxStores) as { c: number };
-  return row.c;
-}
-
-export function getMultiStoreProducts(
-  minStores: number,
-  maxStores: number,
-  limit = 200,
-  offset = 0
-): MultiStoreProduct[] {
-  const db = getDb();
-
-  const rows = db
-    .prepare(
-      `SELECT
-         g.id,
-         g.name,
-         g.slug,
-         COUNT(DISTINCT l.store_id) AS store_count,
-         COUNT(*) AS offer_count,
-         MIN(l.price) AS min_price,
-         MAX(l.price) AS max_price,
-         GROUP_CONCAT(DISTINCT l.store_id) AS store_ids
+): Promise<number> {
+  const row = await queryOne<{ c: number }>(
+    `SELECT COUNT(*)::int AS c FROM (
+       SELECT g.id
        FROM product_groups g
        INNER JOIN listings l ON l.group_id = g.id
        WHERE ${ACTIVE_LISTING}
        GROUP BY g.id
-       HAVING store_count >= ? AND store_count <= ?
-       ORDER BY store_count DESC, offer_count DESC, g.name ASC
-       LIMIT ? OFFSET ?`
-    )
-    .all(minStores, maxStores, limit, offset) as {
+       HAVING COUNT(DISTINCT l.store_id) >= ? AND COUNT(DISTINCT l.store_id) <= ?
+     ) sub`,
+    [minStores, maxStores]
+  );
+  return row?.c ?? 0;
+}
+
+export async function getMultiStoreProducts(
+  minStores: number,
+  maxStores: number,
+  limit = 200,
+  offset = 0
+): Promise<MultiStoreProduct[]> {
+  const rows = await queryRows<{
     id: string;
     name: string;
     slug: string;
@@ -156,7 +130,25 @@ export function getMultiStoreProducts(
     min_price: number;
     max_price: number;
     store_ids: string;
-  }[];
+  }>(
+    `SELECT
+       g.id,
+       g.name,
+       g.slug,
+       COUNT(DISTINCT l.store_id)::int AS store_count,
+       COUNT(*)::int AS offer_count,
+       MIN(l.price) AS min_price,
+       MAX(l.price) AS max_price,
+       STRING_AGG(DISTINCT l.store_id, ',') AS store_ids
+     FROM product_groups g
+     INNER JOIN listings l ON l.group_id = g.id
+     WHERE ${ACTIVE_LISTING}
+     GROUP BY g.id, g.name, g.slug
+     HAVING COUNT(DISTINCT l.store_id) >= ? AND COUNT(DISTINCT l.store_id) <= ?
+     ORDER BY store_count DESC, offer_count DESC, g.name ASC
+     LIMIT ? OFFSET ?`,
+    [minStores, maxStores, limit, offset]
+  );
 
   return rows.map((r) => {
     const storeIds = r.store_ids.split(",").filter(Boolean);

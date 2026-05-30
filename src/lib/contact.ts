@@ -1,4 +1,4 @@
-import { getDb } from "./db";
+import { execute } from "./sql";
 
 export type ContactFormPayload = {
   name: string;
@@ -25,15 +25,15 @@ export function validateContactForm(payload: ContactFormPayload): string | null 
   return null;
 }
 
-export function saveContactMessage(payload: ContactFormPayload): void {
-  const db = getDb();
-  db.prepare(
+export async function saveContactMessage(payload: ContactFormPayload): Promise<void> {
+  await execute(
     `INSERT INTO contact_messages (name, email, message, created_at)
-     VALUES (?, ?, ?, ?)`
-  ).run(
-    payload.name.trim(),
-    payload.email.trim().toLowerCase(),
-    payload.message.trim(),
-    new Date().toISOString()
+     VALUES (?, ?, ?, ?)`,
+    [
+      payload.name.trim(),
+      payload.email.trim().toLowerCase(),
+      payload.message.trim(),
+      new Date().toISOString(),
+    ]
   );
 }
