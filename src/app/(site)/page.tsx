@@ -3,17 +3,17 @@ import { HotDealsCarousel } from "@/components/HotDealsCarousel";
 import { StoreMarquee } from "@/components/StoreMarquee";
 import { HOT_DEALS_SECTION_ID } from "@/lib/home-sections";
 import { stores } from "@/lib/stores";
-import { getHomepageDeals } from "@/lib/catalog";
-import { getSyncStats } from "@/lib/db";
+import { getHomePageData } from "@/lib/home-data";
 
-export const dynamic = "force-dynamic";
+/** Cache HTML + danych — szybki powrót na stronę główną (odświeżenie co 5 min). */
+export const revalidate = 300;
 
 export default async function HomePage() {
-  let deals: Awaited<ReturnType<typeof getHomepageDeals>> = [];
+  let deals: Awaited<ReturnType<typeof getHomePageData>>["deals"] = [];
   let stats = { listings: 0, groups: 0, lastSync: null as string | null };
 
   try {
-    [deals, stats] = await Promise.all([getHomepageDeals(), getSyncStats()]);
+    ({ deals, stats } = await getHomePageData());
   } catch (err) {
     console.error("[home] Błąd odczytu bazy:", err);
   }

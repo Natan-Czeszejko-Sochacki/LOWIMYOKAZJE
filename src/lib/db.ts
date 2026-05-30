@@ -387,23 +387,32 @@ export async function rebuildFts(): Promise<void> {
   /* FTS tylko w SQLite; wyszukiwanie w Postgres przez LIKE */
 }
 
+export async function getSyncStatsUncached(): Promise<{
+  listings: number;
+  groups: number;
+  lastSync: string | null;
+}> {
+  const row = await queryOne<{
+    listings: number;
+    groups: number;
+    last_sync: string | null;
+  }>(
+    `SELECT
+       (SELECT COUNT(*)::int FROM listings) AS listings,
+       (SELECT COUNT(*)::int FROM product_groups) AS groups,
+       (SELECT MAX(updated_at)::text FROM listings) AS last_sync`
+  );
+  return {
+    listings: row?.listings ?? 0,
+    groups: row?.groups ?? 0,
+    lastSync: row?.last_sync ?? null,
+  };
+}
+
 export async function getSyncStats(): Promise<{
   listings: number;
   groups: number;
   lastSync: string | null;
 }> {
-  const listings = await queryOne<{ c: number }>(
-    "SELECT COUNT(*)::int AS c FROM listings"
-  );
-  const groups = await queryOne<{ c: number }>(
-    "SELECT COUNT(*)::int AS c FROM product_groups"
-  );
-  const last = await queryOne<{ t: string | null }>(
-    "SELECT MAX(updated_at)::text AS t FROM listings"
-  );
-  return {
-    listings: listings?.c ?? 0,
-    groups: groups?.c ?? 0,
-    lastSync: last?.t ?? null,
-  };
+  return getSyncStatsUncached();
 }

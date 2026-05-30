@@ -262,26 +262,50 @@ export async function getProductWithOffers(
   );
 }
 
-export async function getHomepageDeals(): Promise<ProductWithOffers[]> {
+const LISTING_COLUMNS = `id, group_id, store_id, name, url, price, original_price,
+  lowest_price_30d, previous_price, image_url, ean, producer_code, brand, in_stock, updated_at`;
+
+/** Tylko oferty z realną promocją — mniejszy skan niż cała tabela listings. */
+export async function getHomepageDealsUncached(): Promise<ProductWithOffers[]> {
+  const storeIn = ALLOWED_STORE_IDS_LIST.map(() => "?").join(",");
+
   const groups = await queryRows<GroupRow>(
-    `SELECT g.*,
-            (MAX(COALESCE(NULLIF(l.original_price, 0), l.price)) / MIN(l.price)) AS deal_score
-     FROM product_groups g
-     INNER JOIN listings l ON l.group_id = g.id
-     WHERE l.store_id IN (${ALLOWED_STORE_IDS_LIST.map(() => "?").join(",")})
-       AND l.price IS NOT NULL
-       AND l.price > 0
-     GROUP BY g.id, g.name, g.brand, g.slug, g.image_url, g.category_id, g.updated_at
-     HAVING (MAX(COALESCE(NULLIF(l.original_price, 0), l.price)) / MIN(l.price)) > 1
-     ORDER BY deal_score DESC, g.updated_at DESC
-     LIMIT 200`,
+    `SELECT g.id, g.name, g.brand, g.slug, g.image_url, g.category_id, g.updated_at
+     FROM (
+       SELECT l.group_id,
+              (MAX(l.original_price) / MIN(l.price)) AS deal_score
+       FROM listings l
+       WHERE l.store_id IN (${storeIn})
+         AND l.price > 0
+         AND l.original_price IS NOT NULL
+         AND l.original_price > l.price
+       GROUP BY l.group_id
+       HAVING (MAX(l.original_price) / MIN(l.price)) >= 1.33
+       ORDER BY deal_score DESC
+       LIMIT 48
+     ) hot
+     INNER JOIN product_groups g ON g.id = hot.group_id
+     ORDER BY hot.deal_score DESC`,
     ALLOWED_STORE_IDS_LIST
   );
 
-  const listingsByGroup = groupRowsByProduct(
-    await getListingsForGroups(groups.map((g) => g.id))
+  if (groups.length === 0) return [];
+
+  const groupPlaceholders = groups.map(() => "?").join(",");
+  const rows = await queryRows<ListingRow>(
+    `SELECT ${LISTING_COLUMNS} FROM listings
+     WHERE group_id IN (${groupPlaceholders})
+       AND store_id IN (${storeIn})
+       AND price > 0`,
+    [...groups.map((g) => g.id), ...ALLOWED_STORE_IDS_LIST]
   );
+
+  const listingsByGroup = groupRowsByProduct(rows);
   return getHotDeals(groupsToProducts(groups, listingsByGroup, null), 15).slice(0, 12);
+}
+
+export async function getHomepageDeals(): Promise<ProductWithOffers[]> {
+  return getHomepageDealsUncached();
 }
 
 export async function searchProducts(query: string): Promise<ProductWithOffers[]> {
