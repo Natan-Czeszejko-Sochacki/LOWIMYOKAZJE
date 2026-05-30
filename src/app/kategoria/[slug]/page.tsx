@@ -6,13 +6,7 @@ import {
 import { CatalogPagination } from "@/components/CatalogPagination";
 import { ProductCard } from "@/components/ProductCard";
 import { getCategoryBySlug } from "@/lib/categories";
-import { getCatalogProducts } from "@/lib/catalog";
-import { getStoreById } from "@/lib/stores";
-import { formatManufacturerDisplay } from "@/lib/product-matcher";
-
-export const dynamic = "force-dynamic";
-
-const CATEGORY_PRODUCT_LIMIT = 96;
+import { getCategoryPageListing } from "@/lib/category-catalog";
 
 function parsePageNumber(value?: string): number {
   const page = Number.parseInt(value ?? "", 10);
@@ -53,66 +47,32 @@ export default async function CategoryPage({ params, searchParams }: Props) {
   const category = getCategoryBySlug(slug);
   if (!category) notFound();
 
-  const baseResults = await getCatalogProducts(slug);
+  const minPromo = Number.parseInt(promo ?? "", 10);
+  const listing = await getCategoryPageListing(slug, {
+    q: searchQuery || undefined,
+    store: store?.trim() || undefined,
+    brand: brand?.trim() || undefined,
+    minPromo: Number.isFinite(minPromo) ? minPromo : 0,
+    minPrice: parsePriceParam(minPrice),
+    maxPrice: parsePriceParam(maxPrice),
+    sort: sort?.trim() || "relevance",
+    page: parsePageNumber(page),
+  });
+
+  const {
+    products,
+    totalFiltered,
+    totalInCategory,
+    storeOptions,
+    brandOptions,
+    currentPage,
+    totalPages,
+  } = listing;
+
   const selectedStore = store?.trim() ?? "";
   const selectedBrand = brand?.trim() ?? "";
-  const minPromo = Number.parseInt(promo ?? "", 10);
   const minPromoValue = Number.isFinite(minPromo) ? minPromo : 0;
-  const minPriceValue = parsePriceParam(minPrice);
-  const maxPriceValue = parsePriceParam(maxPrice);
   const selectedSort = sort?.trim() || "relevance";
-
-  const storeOptions = [...new Set(baseResults.flatMap((p) => p.offers.map((o) => o.storeId)))]
-    .map((id) => ({ id, name: getStoreById(id)?.name ?? id }))
-    .sort((a, b) => a.name.localeCompare(b.name, "pl"));
-
-  const brandOptions = [...new Set(
-    baseResults
-      .map((p) => formatManufacturerDisplay(p.brand, p.name) ?? "")
-      .filter(Boolean)
-  )].sort((a, b) => a.localeCompare(b, "pl"));
-
-  const results = baseResults
-    .filter((p) => {
-      const manufacturer = formatManufacturerDisplay(p.brand, p.name) ?? "";
-      if (searchQuery) {
-        const needle = searchQuery.toLowerCase();
-        const inName = p.name.toLowerCase().includes(needle);
-        const inBrand = (p.brand ?? "").toLowerCase().includes(needle);
-        const inManufacturer = manufacturer.toLowerCase().includes(needle);
-        if (!inName && !inBrand && !inManufacturer) return false;
-      }
-      if (selectedStore && !p.offers.some((o) => o.storeId === selectedStore)) return false;
-      if (selectedBrand && manufacturer.toLowerCase() !== selectedBrand.toLowerCase()) return false;
-      if (minPromoValue > 0 && p.discountPercent < minPromoValue) return false;
-      if (minPriceValue != null && (!p.bestOffer || p.bestOffer.price < minPriceValue)) return false;
-      if (maxPriceValue != null && (!p.bestOffer || p.bestOffer.price > maxPriceValue)) return false;
-      return true;
-    })
-    .sort((a, b) => {
-      switch (selectedSort) {
-        case "price-asc":
-          return (a.bestOffer?.price ?? Number.POSITIVE_INFINITY) - (b.bestOffer?.price ?? Number.POSITIVE_INFINITY);
-        case "price-desc":
-          return (b.bestOffer?.price ?? 0) - (a.bestOffer?.price ?? 0);
-        case "discount-desc":
-          return b.discountPercent - a.discountPercent;
-        case "stores-desc":
-          return b.offers.length - a.offers.length;
-        case "updated-desc":
-          return (b.bestOffer?.updatedAt ?? "").localeCompare(a.bestOffer?.updatedAt ?? "");
-        case "name-asc":
-          return a.name.localeCompare(b.name, "pl");
-        default:
-          return 0;
-      }
-    });
-
-  const requestedPage = parsePageNumber(page);
-  const totalPages = Math.max(1, Math.ceil(results.length / CATEGORY_PRODUCT_LIMIT));
-  const currentPage = Math.min(requestedPage, totalPages);
-  const offset = (currentPage - 1) * CATEGORY_PRODUCT_LIMIT;
-  const products = results.slice(offset, offset + CATEGORY_PRODUCT_LIMIT);
 
   const pageHref = (targetPage: number) => {
     const params = new URLSearchParams();
@@ -173,7 +133,9 @@ export default async function CategoryPage({ params, searchParams }: Props) {
 
         <p className="mt-4 text-water-400">{category.description}</p>
         <p className="mt-1 text-sm text-water-500">
-          {results.length} z {baseResults.length} produktów
+          {totalFiltered === totalInCategory
+            ? `${totalInCategory} produktów`
+            : `${totalFiltered} z ${totalInCategory} produktów`}
           {searchQuery ? ` dla „${searchQuery}"` : ""} · porównanie w 20 sklepach
         </p>
       </div>
