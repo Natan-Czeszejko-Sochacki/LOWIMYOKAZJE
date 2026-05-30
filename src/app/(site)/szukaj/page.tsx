@@ -4,12 +4,22 @@ import {
 } from "@/components/CatalogListingGrid";
 import { CatalogPagination } from "@/components/CatalogPagination";
 import { ProductCard } from "@/components/ProductCard";
-import { searchProducts } from "@/lib/catalog";
-import { getStoreById } from "@/lib/stores";
-import { formatManufacturerDisplay } from "@/lib/product-matcher";
+import {
+  getSearchPageListing,
+  MIN_SEARCH_QUERY_LENGTH,
+} from "@/lib/search-catalog";
 
-export const dynamic = "force-dynamic";
-const SEARCH_RESULTS_LIMIT = 96;
+function parsePriceParam(value?: string): number | null {
+  if (!value?.trim()) return null;
+  const normalized = value.replace(",", ".").replace(/[^\d.]/g, "");
+  const n = Number.parseFloat(normalized);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parsePageNumber(value?: string): number {
+  const page = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(page) && page > 0 ? page : 1;
+}
 
 type Props = {
   searchParams: Promise<{
@@ -24,73 +34,39 @@ type Props = {
   }>;
 };
 
-function parsePriceParam(value?: string): number | null {
-  if (!value?.trim()) return null;
-  const normalized = value.replace(",", ".").replace(/[^\d.]/g, "");
-  const n = Number.parseFloat(normalized);
-  return Number.isFinite(n) ? n : null;
-}
-
-function parsePageNumber(value?: string): number {
-  const page = Number.parseInt(value ?? "", 10);
-  return Number.isFinite(page) && page > 0 ? page : 1;
-}
-
 export default async function SearchPage({ searchParams }: Props) {
   const { q, page, sort, store, brand, promo, minPrice, maxPrice } = await searchParams;
   const query = q?.trim() ?? "";
-  const baseResults = query ? await searchProducts(query) : [];
-  const selectedStore = store?.trim() ?? "";
-  const selectedBrand = brand?.trim() ?? "";
   const minPromo = Number.parseInt(promo ?? "", 10);
   const minPromoValue = Number.isFinite(minPromo) ? minPromo : 0;
-  const minPriceValue = parsePriceParam(minPrice);
-  const maxPriceValue = parsePriceParam(maxPrice);
+
+  const listing = query
+    ? await getSearchPageListing({
+        q: query,
+        store: store?.trim() || undefined,
+        brand: brand?.trim() || undefined,
+        minPromo: minPromoValue,
+        minPrice: parsePriceParam(minPrice),
+        maxPrice: parsePriceParam(maxPrice),
+        sort: sort?.trim() || "relevance",
+        page: parsePageNumber(page),
+      })
+    : null;
+
+  const {
+    products = [],
+    totalFiltered = 0,
+    totalMatches = 0,
+    storeOptions = [],
+    brandOptions = [],
+    currentPage = 1,
+    totalPages = 1,
+    tooShort = false,
+  } = listing ?? {};
+
+  const selectedStore = store?.trim() ?? "";
+  const selectedBrand = brand?.trim() ?? "";
   const selectedSort = sort?.trim() || "relevance";
-
-  const storeOptions = [...new Set(baseResults.flatMap((p) => p.offers.map((o) => o.storeId)))]
-    .map((id) => ({ id, name: getStoreById(id)?.name ?? id }))
-    .sort((a, b) => a.name.localeCompare(b.name, "pl"));
-
-  const brandOptions = [...new Set(
-    baseResults
-      .map((p) => formatManufacturerDisplay(p.brand, p.name) ?? "")
-      .filter(Boolean)
-  )].sort((a, b) => a.localeCompare(b, "pl"));
-
-  const results = baseResults
-    .filter((p) => {
-      const manufacturer = formatManufacturerDisplay(p.brand, p.name) ?? "";
-      if (selectedStore && !p.offers.some((o) => o.storeId === selectedStore)) return false;
-      if (selectedBrand && manufacturer.toLowerCase() !== selectedBrand.toLowerCase()) return false;
-      if (minPromoValue > 0 && p.discountPercent < minPromoValue) return false;
-      if (minPriceValue != null && (!p.bestOffer || p.bestOffer.price < minPriceValue)) return false;
-      if (maxPriceValue != null && (!p.bestOffer || p.bestOffer.price > maxPriceValue)) return false;
-      return true;
-    })
-    .sort((a, b) => {
-      switch (selectedSort) {
-        case "price-asc":
-          return (a.bestOffer?.price ?? Number.POSITIVE_INFINITY) - (b.bestOffer?.price ?? Number.POSITIVE_INFINITY);
-        case "price-desc":
-          return (b.bestOffer?.price ?? 0) - (a.bestOffer?.price ?? 0);
-        case "discount-desc":
-          return b.discountPercent - a.discountPercent;
-        case "stores-desc":
-          return b.offers.length - a.offers.length;
-        case "updated-desc":
-          return (b.bestOffer?.updatedAt ?? "").localeCompare(a.bestOffer?.updatedAt ?? "");
-        case "name-asc":
-          return a.name.localeCompare(b.name, "pl");
-        default:
-          return 0;
-      }
-    });
-  const requestedPage = parsePageNumber(page);
-  const totalPages = Math.max(1, Math.ceil(results.length / SEARCH_RESULTS_LIMIT));
-  const currentPage = Math.min(requestedPage, totalPages);
-  const offset = (currentPage - 1) * SEARCH_RESULTS_LIMIT;
-  const pagedResults = results.slice(offset, offset + SEARCH_RESULTS_LIMIT);
 
   const pageHref = (targetPage: number) => {
     const params = new URLSearchParams();
@@ -109,9 +85,17 @@ export default async function SearchPage({ searchParams }: Props) {
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
       <h1 className="text-3xl font-bold text-foreground">Szukaj</h1>
       {query ? (
-        <p className="mt-2 text-water-400">
-          Wyniki dla „{query}” — {results.length} z {baseResults.length} produktów
-        </p>
+        tooShort ? (
+          <p className="mt-2 text-water-400">
+            Wpisz co najmniej {MIN_SEARCH_QUERY_LENGTH} znaki (masz {query.length}).
+          </p>
+        ) : (
+          <p className="mt-2 text-water-400">
+            Wyniki dla „{query}” — {totalFiltered === totalMatches
+              ? `${totalMatches} produktów`
+              : `${totalFiltered} z ${totalMatches} produktów`}
+          </p>
+        )
       ) : (
         <p className="mt-2 text-water-400">Wpisz frazę w wyszukiwarkę u góry strony.</p>
       )}
@@ -121,14 +105,15 @@ export default async function SearchPage({ searchParams }: Props) {
           type="search"
           name="q"
           defaultValue={query}
-          placeholder="np. Shimano, kołowrotek, wobbler..."
+          minLength={MIN_SEARCH_QUERY_LENGTH}
+          placeholder="np. Shimano, kołowrotek, wobbler…"
           className="w-full rounded-lg border border-water-700 bg-white px-4 py-3 text-foreground placeholder:text-water-500 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
         />
       </form>
 
       <CatalogListingGrid
         topPagination={
-          pagedResults.length > 0 ? (
+          products.length > 0 ? (
             <CatalogPagination
               currentPage={currentPage}
               totalPages={totalPages}
@@ -138,7 +123,7 @@ export default async function SearchPage({ searchParams }: Props) {
           ) : undefined
         }
         sidebar={
-          query ? (
+          query && !tooShort ? (
             <aside className="h-fit rounded-xl border border-water-700 bg-white p-4 shadow-sm lg:sticky lg:top-24">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">
               Sortowanie i filtry
@@ -255,10 +240,10 @@ export default async function SearchPage({ searchParams }: Props) {
           ) : undefined
         }
       >
-        {pagedResults.length > 0 && (
+        {products.length > 0 && (
           <>
             <div className={catalogProductGridClassName}>
-              {pagedResults.map((p) => (
+              {products.map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}
             </div>
@@ -273,7 +258,7 @@ export default async function SearchPage({ searchParams }: Props) {
           </>
         )}
 
-        {query && results.length === 0 && (
+        {query && !tooShort && products.length === 0 && (
           <p className="text-water-500">Nie znaleziono produktów.</p>
         )}
       </CatalogListingGrid>

@@ -67,6 +67,7 @@ export function HomeHero() {
                 <input
                   type="search"
                   name="q"
+                  minLength={2}
                   placeholder="np. Shimano, kołowrotek, wobbler, wędka karpiowa…"
                   className="w-full rounded-2xl border border-water-700 bg-white py-5 pl-14 pr-28 text-lg text-foreground shadow-md placeholder:text-water-500 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 sm:py-6 sm:pl-16 sm:pr-32 sm:text-xl"
                 />
