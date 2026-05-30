@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SiteShell } from "@/components/SiteShell";
+import { rootMetadata } from "@/lib/site-metadata";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -19,20 +20,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: {
-    default: "ŁowimyOkazje.pl — Porównywarka cen wędkarskich",
-    template: "%s | ŁowimyOkazje.pl",
-  },
-  description:
-    "Porównuj ceny sprzętu wędkarskiego w 16 polskich sklepach. Wędki, kołowrotki, przynęty — znajdź najlepszą okazję.",
-  keywords: [
-    "wędkarstwo",
-    "porównywarka cen",
-    "sklep wędkarski",
-    "promocje wędkarskie",
-  ],
-};
+export const metadata: Metadata = rootMetadata;
 
 export default function RootLayout({
   children,

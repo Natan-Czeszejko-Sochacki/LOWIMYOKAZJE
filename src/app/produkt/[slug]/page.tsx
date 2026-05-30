@@ -4,6 +4,7 @@ import { PriceTable } from "@/components/PriceTable";
 import { ProductImage } from "@/components/ProductImage";
 import { AddToCartButton } from "@/components/AddToCartButton";
 import { getProductWithOffers } from "@/lib/product-cache";
+import { pageMetadata, DEFAULT_DESCRIPTION } from "@/lib/site-metadata";
 import { resolveCategory } from "@/lib/categories";
 import { formatManufacturerDisplay } from "@/lib/product-matcher";
 import {
@@ -21,7 +22,11 @@ type Props = { params: Promise<{ slug: string }> };
 export async function generateMetadata({ params }: Props) {
   const { slug } = await params;
   const p = await getProductWithOffers(slug);
-  return { title: p?.name ?? "Produkt" };
+  const title = p?.name ?? "Produkt";
+  const description = p
+    ? `${p.name} — porównaj ceny w polskich sklepach wędkarskich na ŁowimyOkazje.pl`
+    : DEFAULT_DESCRIPTION;
+  return pageMetadata({ title, description });
 }
 
 export default async function ProductPage({ params }: Props) {

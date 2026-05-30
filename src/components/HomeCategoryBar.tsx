@@ -46,7 +46,7 @@ function CategoryDropdownPanel({
 
   return (
     <div
-      className={`z-[100] pt-1 md:absolute md:left-0 md:top-full ${
+      className={`z-[100] w-full pt-1 md:absolute md:left-0 md:top-full md:w-auto ${
         twoColumns ? "md:min-w-[34rem]" : "md:min-w-[14rem]"
       }`}
     >
@@ -121,17 +121,17 @@ export function HomeCategoryBar() {
       className="relative border-b border-water-700 bg-white"
     >
       <div className="mx-auto max-w-7xl overflow-visible px-1 sm:px-4">
-        <ul className="scrollbar-hide flex items-stretch gap-0 overflow-x-auto overflow-y-visible md:flex-wrap md:overflow-visible">
+        <ul className="flex flex-wrap items-stretch gap-x-0 gap-y-0">
           {homeCategoryMenu.map((item) => {
             const hasChildren = item.children && item.children.length > 0;
             const isOpen = openLabel === item.label;
 
             if (!hasChildren) {
               return (
-                <li key={item.label} className="shrink-0">
+                <li key={item.label}>
                   <Link
                     href={item.href}
-                    className="block whitespace-nowrap px-3 py-3 text-sm font-semibold text-water-400 transition-colors hover:text-accent-500 active:text-accent-500 sm:px-4"
+                    className="block px-3 py-2.5 text-sm font-semibold text-water-400 transition-colors hover:text-accent-500 active:text-accent-500 sm:px-4 sm:py-3"
                   >
                     {item.label}
                   </Link>
@@ -142,7 +142,7 @@ export function HomeCategoryBar() {
             return (
               <li
                 key={item.label}
-                className="relative shrink-0"
+                className={`relative ${isOpen ? "w-full sm:w-auto" : ""}`}
                 onMouseEnter={() => {
                   if (window.matchMedia("(hover: hover)").matches) {
                     setOpenLabel(item.label);
@@ -157,7 +157,7 @@ export function HomeCategoryBar() {
                 <button
                   type="button"
                   onClick={() => toggle(item.label)}
-                  className={`flex w-full items-center gap-1 whitespace-nowrap px-3 py-3 text-sm font-semibold transition-colors sm:px-4 ${
+                  className={`flex items-center gap-1 px-3 py-2.5 text-sm font-semibold transition-colors sm:px-4 sm:py-3 ${
                     isOpen ? "text-accent-500" : "text-water-400"
                   }`}
                   aria-haspopup="true"
