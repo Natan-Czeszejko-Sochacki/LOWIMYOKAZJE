@@ -54,8 +54,8 @@ export function getSearchPageListing(
   const key = filterCacheKey(filters);
   return unstable_cache(
     () => getSearchPageListingUncached(filters),
-    ["search-v1", key],
-    { revalidate: 120 }
+    ["search-v3", key],
+    { revalidate: 300 }
   )();
 }
 

@@ -333,6 +333,114 @@ export type SearchPageResult = {
 };
 
 const DEFAULT_SEARCH_LIMIT = 96;
+const DEFAULT_LIST_SORT = "relevance";
+const GROUP_SELECT =
+  "g.id, g.name, g.brand, g.slug, g.image_url, g.category_id, g.updated_at";
+
+function storeInClause(): string {
+  return ALLOWED_STORE_IDS_LIST.map(() => "?").join(",");
+}
+
+function isHeavyListingFilters(
+  filters: {
+    store?: string;
+    brand?: string;
+    minPromo?: number;
+    minPrice?: number | null;
+    maxPrice?: number | null;
+    sort?: string;
+    q?: string;
+  },
+  options?: { allowTextInCategory?: boolean }
+): boolean {
+  const sort = filters.sort?.trim() || DEFAULT_LIST_SORT;
+  if (options?.allowTextInCategory && filters.q?.trim()) return true;
+  return Boolean(
+    filters.store?.trim() ||
+      filters.brand?.trim() ||
+      (filters.minPromo ?? 0) > 0 ||
+      filters.minPrice != null ||
+      filters.maxPrice != null ||
+      (sort !== DEFAULT_LIST_SORT && sort !== "name-asc")
+  );
+}
+
+/** UNION po indeksach trgm — bez JOIN wszystkich listingów przed GROUP BY. */
+function buildSearchMatchedCte(pattern: string): {
+  prefix: string;
+  params: unknown[];
+} {
+  const storeIn = storeInClause();
+  return {
+    prefix: `
+      WITH matched AS (
+        SELECT g.id FROM product_groups g
+        WHERE g.name ILIKE ? OR COALESCE(g.brand, '') ILIKE ?
+        UNION
+        SELECT DISTINCT l.group_id FROM listings l
+        WHERE l.store_id IN (${storeIn})
+          AND l.price > 0
+          AND (
+            l.name ILIKE ? OR COALESCE(l.brand, '') ILIKE ?
+            OR COALESCE(l.ean, '') ILIKE ? OR COALESCE(l.producer_code, '') ILIKE ?
+          )
+      )`,
+    params: [pattern, pattern, ...ALLOWED_STORE_IDS_LIST, pattern, pattern, pattern, pattern],
+  };
+}
+
+async function fetchListingsByGroups(groups: GroupRow[]): Promise<Map<string, ListingRow[]>> {
+  if (groups.length === 0) return new Map();
+  const storeIn = storeInClause();
+  const rows = await queryRows<ListingRow>(
+    `SELECT ${LISTING_COLUMNS} FROM listings
+     WHERE group_id IN (${groups.map(() => "?").join(",")})
+       AND store_id IN (${storeIn})
+       AND price > 0`,
+    [...groups.map((g) => g.id), ...ALLOWED_STORE_IDS_LIST]
+  );
+  return groupRowsByProduct(rows);
+}
+
+function mapFacetStores(rows: { store_id: string }[]) {
+  return rows
+    .map((r) => ({
+      id: r.store_id,
+      name: getStoreById(r.store_id)?.name ?? r.store_id,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, "pl"));
+}
+
+function mapFacetBrands(rows: { brand: string | null; name: string }[]) {
+  return [
+    ...new Set(
+      rows
+        .map((r) => formatManufacturerDisplay(r.brand, r.name) ?? "")
+        .filter(Boolean)
+    ),
+  ].sort((a, b) => a.localeCompare(b, "pl"));
+}
+
+function listingOrderBy(sort: string | undefined): string {
+  switch (sort) {
+    case "price-asc":
+      return "MIN(l.price) ASC";
+    case "price-desc":
+      return "MIN(l.price) DESC";
+    case "discount-desc":
+      return `CASE WHEN MAX(l.original_price) > MIN(l.price)
+        THEN (MAX(l.original_price) - MIN(l.price)) / MAX(l.original_price)
+        ELSE 0 END DESC`;
+    case "stores-desc":
+      return "COUNT(DISTINCT l.store_id) DESC";
+    case "updated-desc":
+      return "MAX(l.updated_at) DESC";
+    case "name-asc":
+      return "g.name ASC";
+    default:
+      return "g.updated_at DESC";
+  }
+}
 
 export async function getSearchPageListingUncached(
   filters: SearchListingFilters
@@ -351,11 +459,15 @@ export async function getSearchPageListingUncached(
     };
   }
 
-  const storeIn = ALLOWED_STORE_IDS_LIST.map(() => "?").join(",");
   const limit = filters.limit ?? DEFAULT_SEARCH_LIMIT;
   const page = Math.max(1, filters.page ?? 1);
   const pattern = `%${q}%`;
 
+  if (!isHeavyListingFilters(filters)) {
+    return getSearchPageListingFast(filters, pattern, limit, page);
+  }
+
+  const storeIn = storeInClause();
   const filterParams: unknown[] = [pattern, pattern, pattern, pattern, pattern, pattern];
   const whereExtra: string[] = [];
   const having: string[] = [];
@@ -399,7 +511,8 @@ export async function getSearchPageListingUncached(
 
   const extraSql = whereExtra.length ? `AND ${whereExtra.join(" AND ")}` : "";
   const havingSql = having.length ? `HAVING ${having.join(" AND ")}` : "";
-  const groupBy = `g.id, g.name, g.brand, g.slug, g.image_url, g.category_id, g.updated_at`;
+  const groupBy = GROUP_SELECT;
+  const orderBy = listingOrderBy(filters.sort);
 
   const baseFrom = `
     FROM product_groups g
@@ -409,79 +522,8 @@ export async function getSearchPageListingUncached(
     WHERE ${textMatch}
     ${extraSql}`;
 
-  const baseParams = [...filterParams, ...ALLOWED_STORE_IDS_LIST];
-
-  const countRow = await queryOne<{ c: number }>(
-    `SELECT COUNT(*)::int AS c FROM (
-      SELECT g.id ${baseFrom}
-      GROUP BY ${groupBy}
-      ${havingSql}
-    ) counted`,
-    baseParams
-  );
-  const totalMatchesRow = await queryOne<{ c: number }>(
-    `SELECT COUNT(DISTINCT g.id)::int AS c ${baseFrom}`,
-    baseParams
-  );
-
-  const totalFiltered = countRow?.c ?? 0;
-  const totalMatches = totalMatchesRow?.c ?? 0;
-  const totalPages = Math.max(1, Math.ceil(totalFiltered / limit));
-  const currentPage = Math.min(page, totalPages);
-  const safeOffset = (currentPage - 1) * limit;
-
-  let orderBy = "g.updated_at DESC";
-  switch (filters.sort) {
-    case "price-asc":
-      orderBy = "MIN(l.price) ASC";
-      break;
-    case "price-desc":
-      orderBy = "MIN(l.price) DESC";
-      break;
-    case "discount-desc":
-      orderBy = `CASE WHEN MAX(l.original_price) > MIN(l.price)
-        THEN (MAX(l.original_price) - MIN(l.price)) / MAX(l.original_price)
-        ELSE 0 END DESC`;
-      break;
-    case "stores-desc":
-      orderBy = "COUNT(DISTINCT l.store_id) DESC";
-      break;
-    case "updated-desc":
-      orderBy = "MAX(l.updated_at) DESC";
-      break;
-    case "name-asc":
-      orderBy = "g.name ASC";
-      break;
-  }
-
-  const groups =
-    totalFiltered === 0
-      ? []
-      : await queryRows<GroupRow>(
-          `SELECT g.id, g.name, g.brand, g.slug, g.image_url, g.category_id, g.updated_at
-           ${baseFrom}
-           GROUP BY ${groupBy}
-           ${havingSql}
-           ORDER BY ${orderBy}
-           LIMIT ? OFFSET ?`,
-          [...baseParams, limit, safeOffset]
-        );
-
-  const listingsByGroup = groupRowsByProduct(
-    groups.length > 0
-      ? await queryRows<ListingRow>(
-          `SELECT ${LISTING_COLUMNS} FROM listings
-           WHERE group_id IN (${groups.map(() => "?").join(",")})
-             AND store_id IN (${storeIn})
-             AND price > 0`,
-          [...groups.map((g) => g.id), ...ALLOWED_STORE_IDS_LIST]
-        )
-      : []
-  );
-
-  const products = groupsToProducts(groups, listingsByGroup, null);
-
-  const facetParams = [pattern, pattern, pattern, pattern, pattern, pattern, ...ALLOWED_STORE_IDS_LIST];
+  const baseParams = [...ALLOWED_STORE_IDS_LIST, ...filterParams];
+  const facetParams = [...ALLOWED_STORE_IDS_LIST, ...filterParams.slice(0, 6)];
   const facetFrom = `
     FROM product_groups g
     INNER JOIN listings l ON l.group_id = g.id
@@ -489,7 +531,21 @@ export async function getSearchPageListingUncached(
       AND l.price > 0
     WHERE ${textMatch}`;
 
-  const [facetStores, facetBrands] = await Promise.all([
+  const [countRow, totalMatchesRow, facetStores, facetBrands] = await Promise.all([
+    queryOne<{ c: number }>(
+      `SELECT COUNT(*)::int AS c FROM (
+        SELECT g.id ${baseFrom}
+        GROUP BY ${groupBy}
+        ${havingSql}
+      ) counted`,
+      baseParams
+    ),
+    having.length > 0
+      ? queryOne<{ c: number }>(
+          `SELECT COUNT(DISTINCT g.id)::int AS c ${baseFrom}`,
+          baseParams
+        )
+      : Promise.resolve(undefined),
     queryRows<{ store_id: string }>(
       `SELECT DISTINCT l.store_id ${facetFrom}`,
       facetParams
@@ -500,23 +556,118 @@ export async function getSearchPageListingUncached(
     ),
   ]);
 
+  const totalFiltered = countRow?.c ?? 0;
+  const totalMatches = having.length > 0 ? (totalMatchesRow?.c ?? 0) : totalFiltered;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / limit));
+  const currentPage = Math.min(page, totalPages);
+  const safeOffset = (currentPage - 1) * limit;
+
+  const groups =
+    totalFiltered === 0
+      ? []
+      : await queryRows<GroupRow>(
+          `SELECT ${GROUP_SELECT}
+           ${baseFrom}
+           GROUP BY ${groupBy}
+           ${havingSql}
+           ORDER BY ${orderBy}
+           LIMIT ? OFFSET ?`,
+          [...baseParams, limit, safeOffset]
+        );
+
+  const products = groupsToProducts(
+    groups,
+    await fetchListingsByGroups(groups),
+    null
+  );
+
   return {
     products,
     totalFiltered,
     totalMatches,
-    storeOptions: facetStores
-      .map((r) => ({
-        id: r.store_id,
-        name: getStoreById(r.store_id)?.name ?? r.store_id,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name, "pl")),
-    brandOptions: [
-      ...new Set(
-        facetBrands
-          .map((r) => formatManufacturerDisplay(r.brand, r.name) ?? "")
-          .filter(Boolean)
-      ),
-    ].sort((a, b) => a.localeCompare(b, "pl")),
+    storeOptions: mapFacetStores(facetStores),
+    brandOptions: mapFacetBrands(facetBrands),
+    currentPage,
+    totalPages,
+  };
+}
+
+async function getSearchPageListingFast(
+  filters: SearchListingFilters,
+  pattern: string,
+  limit: number,
+  page: number
+): Promise<SearchPageResult> {
+  const { prefix, params: matchedParams } = buildSearchMatchedCte(pattern);
+  const storeIn = storeInClause();
+  const orderBy =
+    filters.sort === "name-asc" ? "g.name ASC" : "g.updated_at DESC";
+
+  const safeOffsetGuess = (page - 1) * limit;
+
+  const [countRow, facetStores, facetBrands, groups] = await Promise.all([
+    queryOne<{ c: number }>(
+      `${prefix} SELECT COUNT(*)::int AS c FROM matched`,
+      matchedParams
+    ),
+    queryRows<{ store_id: string }>(
+      `${prefix}
+       SELECT DISTINCT l.store_id
+       FROM listings l
+       INNER JOIN matched m ON m.id = l.group_id
+       WHERE l.store_id IN (${storeIn}) AND l.price > 0`,
+      [...matchedParams, ...ALLOWED_STORE_IDS_LIST]
+    ),
+    queryRows<{ brand: string | null; name: string }>(
+      `${prefix}
+       SELECT DISTINCT g.brand, g.name
+       FROM product_groups g
+       INNER JOIN matched m ON m.id = g.id`,
+      matchedParams
+    ),
+    queryRows<GroupRow>(
+      `${prefix}
+       SELECT ${GROUP_SELECT}
+       FROM product_groups g
+       INNER JOIN matched m ON m.id = g.id
+       ORDER BY ${orderBy}
+       LIMIT ? OFFSET ?`,
+      [...matchedParams, limit, safeOffsetGuess]
+    ),
+  ]);
+
+  const totalFiltered = countRow?.c ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / limit));
+  const currentPage = Math.min(page, totalPages);
+  const safeOffset = (currentPage - 1) * limit;
+
+  const pageGroups =
+    totalFiltered === 0
+      ? []
+      : safeOffset === safeOffsetGuess
+        ? groups
+        : await queryRows<GroupRow>(
+            `${prefix}
+             SELECT ${GROUP_SELECT}
+             FROM product_groups g
+             INNER JOIN matched m ON m.id = g.id
+             ORDER BY ${orderBy}
+             LIMIT ? OFFSET ?`,
+            [...matchedParams, limit, safeOffset]
+          );
+
+  const products = groupsToProducts(
+    pageGroups,
+    await fetchListingsByGroups(pageGroups),
+    null
+  );
+
+  return {
+    products,
+    totalFiltered,
+    totalMatches: totalFiltered,
+    storeOptions: mapFacetStores(facetStores),
+    brandOptions: mapFacetBrands(facetBrands),
     currentPage,
     totalPages,
   };
@@ -562,11 +713,21 @@ export async function getCategoryPageListingUncached(
 ): Promise<CategoryPageResult> {
   const categorySlugs = [...getCategoryDescendantSlugs(slug)];
   const categorySlugsSet = new Set(categorySlugs);
-  const storeIn = ALLOWED_STORE_IDS_LIST.map(() => "?").join(",");
-  const catIn = categorySlugs.map(() => "?").join(",");
   const limit = filters.limit ?? DEFAULT_CATEGORY_LIMIT;
   const page = Math.max(1, filters.page ?? 1);
 
+  if (!isHeavyListingFilters(filters, { allowTextInCategory: true })) {
+    return getCategoryPageListingFast(
+      categorySlugs,
+      categorySlugsSet,
+      filters,
+      limit,
+      page
+    );
+  }
+
+  const storeIn = storeInClause();
+  const catIn = categorySlugs.map(() => "?").join(",");
   const filterParams: unknown[] = [];
   const whereExtra: string[] = [];
   const having: string[] = [];
@@ -611,7 +772,8 @@ export async function getCategoryPageListingUncached(
 
   const whereSql = whereExtra.length ? `AND ${whereExtra.join(" AND ")}` : "";
   const havingSql = having.length ? `HAVING ${having.join(" AND ")}` : "";
-  const groupBy = `g.id, g.name, g.brand, g.slug, g.image_url, g.category_id, g.updated_at`;
+  const groupBy = GROUP_SELECT;
+  const orderBy = listingOrderBy(filters.sort);
 
   const baseFrom = `
     FROM product_groups g
@@ -621,73 +783,17 @@ export async function getCategoryPageListingUncached(
     WHERE g.category_id IN (${catIn})
     ${whereSql}`;
 
-  const baseParams = [...categorySlugs, ...ALLOWED_STORE_IDS_LIST, ...filterParams];
+  const baseParams = [...ALLOWED_STORE_IDS_LIST, ...categorySlugs, ...filterParams];
 
-  const countRow = await queryOne<{ c: number }>(
-    `SELECT COUNT(*)::int AS c FROM (
-      SELECT g.id ${baseFrom}
-      GROUP BY ${groupBy}
-      ${havingSql}
-    ) counted`,
-    baseParams
-  );
-  const totalFiltered = countRow?.c ?? 0;
-  const totalPages = Math.max(1, Math.ceil(totalFiltered / limit));
-  const currentPage = Math.min(page, totalPages);
-  const safeOffset = (currentPage - 1) * limit;
-
-  let orderBy = "g.updated_at DESC";
-  switch (filters.sort) {
-    case "price-asc":
-      orderBy = "MIN(l.price) ASC";
-      break;
-    case "price-desc":
-      orderBy = "MIN(l.price) DESC";
-      break;
-    case "discount-desc":
-      orderBy = `CASE WHEN MAX(l.original_price) > MIN(l.price)
-        THEN (MAX(l.original_price) - MIN(l.price)) / MAX(l.original_price)
-        ELSE 0 END DESC`;
-      break;
-    case "stores-desc":
-      orderBy = "COUNT(DISTINCT l.store_id) DESC";
-      break;
-    case "updated-desc":
-      orderBy = "MAX(l.updated_at) DESC";
-      break;
-    case "name-asc":
-      orderBy = "g.name ASC";
-      break;
-  }
-
-  const groups =
-    totalFiltered === 0
-      ? []
-      : await queryRows<GroupRow>(
-          `SELECT g.id, g.name, g.brand, g.slug, g.image_url, g.category_id, g.updated_at
-           ${baseFrom}
-           GROUP BY ${groupBy}
-           ${havingSql}
-           ORDER BY ${orderBy}
-           LIMIT ? OFFSET ?`,
-          [...baseParams, limit, safeOffset]
-        );
-
-  const listingsByGroup = groupRowsByProduct(
-    groups.length > 0
-      ? await queryRows<ListingRow>(
-          `SELECT ${LISTING_COLUMNS} FROM listings
-           WHERE group_id IN (${groups.map(() => "?").join(",")})
-             AND store_id IN (${storeIn})
-             AND price > 0`,
-          [...groups.map((g) => g.id), ...ALLOWED_STORE_IDS_LIST]
-        )
-      : []
-  );
-
-  const products = groupsToProducts(groups, listingsByGroup, categorySlugsSet);
-
-  const [facetStores, facetBrands, totalInCategory] = await Promise.all([
+  const [countRow, facetStores, facetBrands, totalInCategory] = await Promise.all([
+    queryOne<{ c: number }>(
+      `SELECT COUNT(*)::int AS c FROM (
+        SELECT g.id ${baseFrom}
+        GROUP BY ${groupBy}
+        ${havingSql}
+      ) counted`,
+      baseParams
+    ),
     queryRows<{ store_id: string }>(
       `SELECT DISTINCT l.store_id
        FROM listings l
@@ -704,36 +810,143 @@ export async function getCategoryPageListingUncached(
          AND l.store_id IN (${storeIn})
          AND l.price > 0
        WHERE g.category_id IN (${catIn})`,
-      [...categorySlugs, ...ALLOWED_STORE_IDS_LIST]
+      [...ALLOWED_STORE_IDS_LIST, ...categorySlugs]
     ),
     queryOne<{ c: number }>(
-      `SELECT COUNT(DISTINCT g.id)::int AS c
+      `SELECT COUNT(*)::int AS c
        FROM product_groups g
-       INNER JOIN listings l ON l.group_id = g.id
-         AND l.store_id IN (${storeIn})
-         AND l.price > 0
-       WHERE g.category_id IN (${catIn})`,
+       WHERE g.category_id IN (${catIn})
+         AND EXISTS (
+           SELECT 1 FROM listings l
+           WHERE l.group_id = g.id
+             AND l.store_id IN (${storeIn})
+             AND l.price > 0
+         )`,
       [...categorySlugs, ...ALLOWED_STORE_IDS_LIST]
     ),
   ]);
+
+  const totalFiltered = countRow?.c ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / limit));
+  const currentPage = Math.min(page, totalPages);
+  const safeOffset = (currentPage - 1) * limit;
+
+  const groups =
+    totalFiltered === 0
+      ? []
+      : await queryRows<GroupRow>(
+          `SELECT ${GROUP_SELECT}
+           ${baseFrom}
+           GROUP BY ${groupBy}
+           ${havingSql}
+           ORDER BY ${orderBy}
+           LIMIT ? OFFSET ?`,
+          [...baseParams, limit, safeOffset]
+        );
+
+  const products = groupsToProducts(
+    groups,
+    await fetchListingsByGroups(groups),
+    categorySlugsSet
+  );
 
   return {
     products,
     totalFiltered,
     totalInCategory: totalInCategory?.c ?? 0,
-    storeOptions: facetStores
-      .map((r) => ({
-        id: r.store_id,
-        name: getStoreById(r.store_id)?.name ?? r.store_id,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name, "pl")),
-    brandOptions: [
-      ...new Set(
-        facetBrands
-          .map((r) => formatManufacturerDisplay(r.brand, r.name) ?? "")
-          .filter(Boolean)
-      ),
-    ].sort((a, b) => a.localeCompare(b, "pl")),
+    storeOptions: mapFacetStores(facetStores),
+    brandOptions: mapFacetBrands(facetBrands),
+    currentPage,
+    totalPages,
+  };
+}
+
+async function getCategoryPageListingFast(
+  categorySlugs: string[],
+  categorySlugsSet: Set<string>,
+  filters: CategoryListingFilters,
+  limit: number,
+  page: number
+): Promise<CategoryPageResult> {
+  const storeIn = storeInClause();
+  const catIn = categorySlugs.map(() => "?").join(",");
+  const orderBy =
+    filters.sort === "name-asc" ? "g.name ASC" : "g.updated_at DESC";
+
+  const stockExists = `EXISTS (
+    SELECT 1 FROM listings l
+    WHERE l.group_id = g.id
+      AND l.store_id IN (${storeIn})
+      AND l.price > 0
+  )`;
+
+  const baseWhere = `g.category_id IN (${catIn}) AND ${stockExists}`;
+  const baseParams = [...categorySlugs, ...ALLOWED_STORE_IDS_LIST];
+
+  const safeOffsetGuess = (page - 1) * limit;
+
+  const [countRow, facetStores, facetBrands, groups] = await Promise.all([
+    queryOne<{ c: number }>(
+      `SELECT COUNT(*)::int AS c FROM product_groups g WHERE ${baseWhere}`,
+      baseParams
+    ),
+    queryRows<{ store_id: string }>(
+      `SELECT DISTINCT l.store_id
+       FROM listings l
+       INNER JOIN product_groups g ON g.id = l.group_id
+       WHERE g.category_id IN (${catIn})
+         AND l.store_id IN (${storeIn})
+         AND l.price > 0`,
+      [...categorySlugs, ...ALLOWED_STORE_IDS_LIST]
+    ),
+    queryRows<{ brand: string | null; name: string }>(
+      `SELECT DISTINCT g.brand, g.name
+       FROM product_groups g
+       WHERE g.category_id IN (${catIn})
+         AND ${stockExists}`,
+      baseParams
+    ),
+    queryRows<GroupRow>(
+      `SELECT ${GROUP_SELECT}
+       FROM product_groups g
+       WHERE ${baseWhere}
+       ORDER BY ${orderBy}
+       LIMIT ? OFFSET ?`,
+      [...baseParams, limit, safeOffsetGuess]
+    ),
+  ]);
+
+  const totalFiltered = countRow?.c ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / limit));
+  const currentPage = Math.min(page, totalPages);
+  const safeOffset = (currentPage - 1) * limit;
+
+  const pageGroups =
+    totalFiltered === 0
+      ? []
+      : safeOffset === safeOffsetGuess
+        ? groups
+        : await queryRows<GroupRow>(
+            `SELECT ${GROUP_SELECT}
+             FROM product_groups g
+             WHERE ${baseWhere}
+             ORDER BY ${orderBy}
+             LIMIT ? OFFSET ?`,
+            [...baseParams, limit, safeOffset]
+          );
+
+  const products = groupsToProducts(
+    pageGroups,
+    await fetchListingsByGroups(pageGroups),
+    categorySlugsSet
+  );
+
+  return {
+    products,
+    totalFiltered,
+    totalInCategory: totalFiltered,
+    storeOptions: mapFacetStores(facetStores),
+    brandOptions: mapFacetBrands(facetBrands),
     currentPage,
     totalPages,
   };

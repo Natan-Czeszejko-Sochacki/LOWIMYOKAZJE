@@ -42,7 +42,7 @@ export function getCategoryPageListing(
 
   return unstable_cache(
     () => getCategoryPageListingUncached(slug, filters),
-    ["category-default-v1", key],
+    ["category-default-v3", key],
     { revalidate: 300, tags: [`category-${slug}`] }
   )();
 }
